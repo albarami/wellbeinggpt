@@ -6,6 +6,15 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from typing import Optional
 
+from sqlalchemy import text
+
+from apps.api.core.database import get_session
+from apps.api.core.muhasibi_state_machine import create_middleware
+from apps.api.core.schemas import FinalResponse
+from apps.api.guardrails.citation_enforcer import Guardrails
+from apps.api.retrieve.entity_resolver import EntityResolver
+from apps.api.retrieve.hybrid_retriever import HybridRetriever
+
 router = APIRouter()
 
 
@@ -96,7 +105,7 @@ class SearchResponse(BaseModel):
     total_found: int
 
 
-@router.post("/ask", response_model=AskResponse)
+@router.post("/ask", response_model=FinalResponse)
 async def ask_question(request: AskRequest):
     """
     Ask a question about the wellbeing framework.
@@ -119,27 +128,36 @@ async def ask_question(request: AskRequest):
     Returns:
         AskResponse: Answer with citations, or refusal if no evidence.
     """
-    # TODO: Implement Muḥāsibī state machine in Phase 4
+    async with get_session() as session:
+        # Build resolver from DB (best-effort; if DB empty this remains empty and system will refuse)
+        resolver = EntityResolver()
+        try:
+            pillars = (await session.execute(text("SELECT id, name_ar FROM pillar"))).fetchall()
+            core_values = (await session.execute(text("SELECT id, name_ar FROM core_value"))).fetchall()
+            sub_values = (await session.execute(text("SELECT id, name_ar FROM sub_value"))).fetchall()
+            resolver.load_entities(
+                pillars=[{"id": r.id, "name_ar": r.name_ar} for r in pillars],
+                core_values=[{"id": r.id, "name_ar": r.name_ar} for r in core_values],
+                sub_values=[{"id": r.id, "name_ar": r.name_ar} for r in sub_values],
+            )
+        except Exception:
+            # DB may be unavailable in some dev contexts; proceed with empty resolver
+            pass
 
-    # Placeholder response showing refusal behavior
-    return AskResponse(
-        listen_summary_ar="تم استلام السؤال. التنفيذ قيد الانتظار.",
-        purpose=Purpose(
-            ultimate_goal_ar="الإجابة من الأدلة فقط",
-            constraints_ar=[
-                "evidence_only",
-                "cite_every_claim",
-                "refuse_if_missing",
-            ],
-        ),
-        path_plan_ar=["استماع", "فهم", "استرجاع", "تفسير"],
-        answer_ar="لا يوجد في البيانات الحالية ما يدعم الإجابة. التنفيذ قيد الانتظار.",
-        citations=[],
-        entities=[],
-        difficulty="medium",
-        not_found=True,
-        confidence="low",
-    )
+        guardrails = Guardrails()
+
+        retriever = HybridRetriever()
+        # Attach session for middleware retrieval (keeps middleware signature stable for tests)
+        retriever._session = session  # type: ignore[attr-defined]
+
+        middleware = create_middleware(
+            entity_resolver=resolver,
+            retriever=retriever,
+            llm_client=None,  # optional; deterministic fallback is used if not configured
+            guardrails=guardrails,
+        )
+
+        return await middleware.process(request.question, language=request.language)
 
 
 @router.post("/search/vector", response_model=SearchResponse)

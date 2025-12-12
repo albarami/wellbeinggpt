@@ -27,6 +27,7 @@ from apps.api.core.schemas import (
     FinalResponse,
 )
 from apps.api.retrieve.normalize_ar import normalize_for_matching, extract_arabic_words
+from apps.api.retrieve.hybrid_retriever import HybridRetriever, RetrievalInputs
 
 
 class MuhasibiState(Enum):
@@ -124,7 +125,7 @@ class MuhasibiMiddleware:
             guardrails: Guardrails for citation validation.
         """
         self.entity_resolver = entity_resolver
-        self.retriever = retriever
+        self.retriever: Optional[HybridRetriever] = retriever
         self.llm_client = llm_client
         self.guardrails = guardrails
 
@@ -274,10 +275,26 @@ class MuhasibiMiddleware:
         This is a non-LLM state that retrieves evidence.
         """
         if self.retriever:
-            # TODO: Call retriever with detected entities
-            pass
+            try:
+                # Best-effort retrieval; retriever opens DB session internally if provided as callable.
+                # Here we expect a HybridRetriever plus a DB session passed via closure in /ask route.
+                retrieve_fn = getattr(self.retriever, "retrieve", None)
+                if retrieve_fn and hasattr(self.retriever, "_session") and self.retriever._session:
+                    session = self.retriever._session
+                    merge = await self.retriever.retrieve(
+                        session,
+                        RetrievalInputs(
+                            query=ctx.question,
+                            resolved_entities=ctx.detected_entities,
+                        ),
+                    )
+                    ctx.evidence_packets = merge.evidence_packets
+                    ctx.has_definition = merge.has_definition
+                    ctx.has_evidence = merge.has_evidence
+            except Exception as e:
+                ctx.account_issues.append(f"فشل الاسترجاع: {e}")
 
-        # For now, use empty evidence if no retriever
+        # If still empty, keep flags consistent
         ctx.has_definition = len([
             p for p in ctx.evidence_packets
             if p.get("chunk_type") == "definition"
@@ -331,11 +348,63 @@ class MuhasibiMiddleware:
             # TODO: Call LLM with evidence packets
             pass
 
-        # Default answer if no LLM or evidence
+        # Deterministic fallback answer if evidence exists but no LLM call occurred.
+        if not ctx.answer_ar and ctx.evidence_packets:
+            defs = [p for p in ctx.evidence_packets if p.get("chunk_type") == "definition"]
+            evs = [p for p in ctx.evidence_packets if p.get("chunk_type") == "evidence"]
+            chosen = (defs[:1] + evs[:2]) or ctx.evidence_packets[:3]
+
+            parts = []
+            if defs:
+                parts.append(f"التعريف:\n{defs[0].get('text_ar','').strip()}")
+            if evs:
+                parts.append("التأصيل/الدليل:")
+                for e in evs[:2]:
+                    parts.append(e.get("text_ar", "").strip())
+
+            if not parts:
+                parts = ["تم العثور على أدلة، لكن تعذر تلخيصها آليًا بدون نموذج لغوي."]
+
+            ctx.answer_ar = "\n\n".join([p for p in parts if p])
+            ctx.citations = [
+                Citation(
+                    chunk_id=p.get("chunk_id", ""),
+                    source_anchor=p.get("source_anchor", ""),
+                    ref=(p.get("refs", [{}])[0].get("ref") if p.get("refs") else None),
+                )
+                for p in chosen
+                if p.get("chunk_id") and p.get("source_anchor")
+            ]
+            ctx.confidence = Confidence.MEDIUM if ctx.citations else Confidence.LOW
+            ctx.not_found = not bool(ctx.citations)
+
+        # If still no answer, refuse safely
         if not ctx.answer_ar:
-            ctx.answer_ar = "تعذر إنشاء إجابة. يرجى المحاولة مرة أخرى."
+            ctx.answer_ar = "لا يوجد في البيانات الحالية ما يدعم الإجابة على هذا السؤال."
             ctx.not_found = True
             ctx.confidence = Confidence.LOW
+            ctx.citations = []
+
+        # Run guardrails if available
+        if self.guardrails:
+            try:
+                result = self.guardrails.validate(
+                    answer_ar=ctx.answer_ar,
+                    citations=[c.model_dump() for c in ctx.citations],
+                    evidence_packets=ctx.evidence_packets,
+                    not_found=ctx.not_found,
+                )
+                if not result.passed:
+                    ctx.not_found = True
+                    ctx.answer_ar = "لا يوجد في البيانات الحالية ما يدعم الإجابة على هذا السؤال."
+                    ctx.citations = []
+                    ctx.confidence = Confidence.LOW
+            except Exception:
+                # Fail closed
+                ctx.not_found = True
+                ctx.answer_ar = "لا يوجد في البيانات الحالية ما يدعم الإجابة على هذا السؤال."
+                ctx.citations = []
+                ctx.confidence = Confidence.LOW
 
         # Build entities from detected
         ctx.entities = [

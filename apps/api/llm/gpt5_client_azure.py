@@ -153,32 +153,40 @@ class AzureResponsesProvider(LLMProvider):
         try:
             client = await self._get_client()
 
-            # Build messages
-            messages = [
+            # Responses API uses `input` and `max_output_tokens`
+            input_messages = [
                 {"role": "system", "content": request.system_prompt},
                 {"role": "user", "content": request.user_message},
             ]
 
-            # Build request parameters
             params: dict[str, Any] = {
-                "model": self.config.deployment_name,
-                "messages": messages,
+                "model": self.config.deployment_name,  # Azure deployment name
+                "input": input_messages,
                 "temperature": request.temperature or self.config.temperature,
-                "max_tokens": request.max_tokens or self.config.max_tokens,
+                "max_output_tokens": request.max_tokens or self.config.max_tokens,
             }
 
-            # Add response format if provided (for structured outputs)
             if request.response_format:
                 params["response_format"] = {
                     "type": "json_schema",
                     "json_schema": request.response_format,
                 }
 
-            # Make the request
-            response = await client.chat.completions.create(**params)
+            response = await client.responses.create(**params)
 
-            # Extract content
-            content = response.choices[0].message.content or ""
+            # Extract content (SDK provides output_text; fallback to parsing output blocks)
+            content = getattr(response, "output_text", "") or ""
+            if not content and getattr(response, "output", None):
+                try:
+                    # Best-effort fallback: concatenate text blocks
+                    blocks = []
+                    for item in response.output:
+                        for c in getattr(item, "content", []) or []:
+                            if getattr(c, "type", "") == "output_text":
+                                blocks.append(getattr(c, "text", ""))
+                    content = "\n".join([b for b in blocks if b])
+                except Exception:
+                    content = ""
 
             # Try to parse as JSON if we requested structured output
             parsed_json = None
@@ -191,13 +199,13 @@ class AzureResponsesProvider(LLMProvider):
             return LLMResponse(
                 content=content,
                 parsed_json=parsed_json,
-                model=response.model,
+                model=getattr(response, "model", "") or "",
                 usage={
-                    "prompt_tokens": response.usage.prompt_tokens if response.usage else 0,
-                    "completion_tokens": response.usage.completion_tokens if response.usage else 0,
-                    "total_tokens": response.usage.total_tokens if response.usage else 0,
+                    "prompt_tokens": getattr(getattr(response, "usage", None), "input_tokens", 0) or 0,
+                    "completion_tokens": getattr(getattr(response, "usage", None), "output_tokens", 0) or 0,
+                    "total_tokens": getattr(getattr(response, "usage", None), "total_tokens", 0) or 0,
                 },
-                finish_reason=response.choices[0].finish_reason or "",
+                finish_reason="stop",
             )
 
         except Exception as e:
