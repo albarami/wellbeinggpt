@@ -9,6 +9,7 @@ from datetime import datetime
 
 from apps.api.core.database import get_session
 from apps.api.ingest.docx_reader import DocxReader
+from apps.api.ingest.ocr_augment import augment_document_with_image_ocr
 from apps.api.ingest.rule_extractor import RuleExtractor
 from apps.api.ingest.validator import validate_extraction, ValidationSeverity
 from apps.api.ingest.canonical_json import extraction_to_canonical_json
@@ -65,6 +66,9 @@ async def ingest_docx(file: UploadFile = File(...)):
     content = await file.read()
     reader = DocxReader()
     parsed = reader.read_bytes(content, file.filename)
+    # OCR augmentation for image-based pages inside the DOCX (ingestion-only).
+    # This ensures all values/evidence embedded as non-selectable images are included in Postgres/RAG/graph.
+    parsed, _ocr_stats = await augment_document_with_image_ocr(parsed, content)
 
     extractor = RuleExtractor(framework_version="2025-10")
     extracted = extractor.extract(parsed)

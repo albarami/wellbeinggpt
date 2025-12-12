@@ -733,6 +733,7 @@ async def build_edges_for_source(session: AsyncSession, source_doc_id: str) -> N
     - Pillar CONTAINS CoreValue
     - CoreValue CONTAINS SubValue
     - (Core/Sub) SUPPORTED_BY Evidence
+    - (Core/Sub) SHARES_REF (cross-links) when multiple entities share the same ref_norm
     """
     # CONTAINS: pillar -> core_value
     await session.execute(
@@ -776,6 +777,55 @@ async def build_edges_for_source(session: AsyncSession, source_doc_id: str) -> N
                    'rule_exact_match', 'system', 'evidence_link', 'approved'
             FROM evidence e
             WHERE e.source_doc_id = :source_doc_id
+            ON CONFLICT DO NOTHING
+            """
+        ),
+        {"source_doc_id": source_doc_id},
+    )
+
+    # SHARES_REF: cross-link entities that share the same normalized reference.
+    # This creates an explicit graph signal for "same verse/hadith used in multiple places",
+    # enabling cross-pillar discovery without relying on vector-only coincidence.
+    await session.execute(
+        text(
+            """
+            WITH refs AS (
+                SELECT DISTINCT
+                    e.entity_type,
+                    e.entity_id,
+                    e.ref_norm,
+                    e.evidence_type
+                FROM evidence e
+                WHERE e.source_doc_id = :source_doc_id
+                  AND e.ref_norm IS NOT NULL
+                  AND e.ref_norm <> ''
+            ),
+            pairs AS (
+                SELECT
+                    r1.entity_type AS from_type,
+                    r1.entity_id AS from_id,
+                    r2.entity_type AS to_type,
+                    r2.entity_id AS to_id,
+                    r1.ref_norm AS ref_norm,
+                    r1.evidence_type AS evidence_type
+                FROM refs r1
+                JOIN refs r2
+                  ON r1.ref_norm = r2.ref_norm
+                 AND (r1.entity_type, r1.entity_id) < (r2.entity_type, r2.entity_id)
+            )
+            INSERT INTO edge (from_type, from_id, rel_type, to_type, to_id,
+                              created_method, created_by, justification, status)
+            SELECT
+                p.from_type,
+                p.from_id,
+                'SHARES_REF',
+                p.to_type,
+                p.to_id,
+                'rule_exact_match',
+                'system',
+                p.evidence_type || ':' || p.ref_norm,
+                'approved'
+            FROM pairs p
             ON CONFLICT DO NOTHING
             """
         ),

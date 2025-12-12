@@ -70,6 +70,7 @@ CORE_VALUES_LIST_MARKERS = [
 SUB_VALUES_LIST_MARKERS = [
     "القيم الجزئية",
     "القيم الأحفاد",
+    "الأحفاد",
 ]
 
 # Definition markers
@@ -605,6 +606,9 @@ class RuleExtractor:
 
     def _is_sub_values_list_marker(self, normalized_text: str) -> bool:
         """Check if text marks sub-values list."""
+        # Some tables label the section simply as "(الأحفاد)"
+        if normalize_for_matching("الأحفاد") in normalized_text and len(normalized_text) <= 20:
+            return True
         if not normalized_text.startswith(normalize_for_matching("القيم")):
             return False
         return (

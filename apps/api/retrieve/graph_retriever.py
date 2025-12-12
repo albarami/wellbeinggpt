@@ -44,7 +44,6 @@ async def get_entity_neighbors(
                 e.rel_type,
                 e.to_type as neighbor_type,
                 e.to_id as neighbor_id,
-                e.confidence,
                 e.created_method,
                 e.score
             FROM edge e
@@ -73,7 +72,6 @@ async def get_entity_neighbors(
                 "neighbor_type": row.neighbor_type,
                 "neighbor_id": row.neighbor_id,
                 "direction": "outgoing",
-                "confidence": row.confidence,
                 "created_method": row.created_method,
                 "score": row.score,
             })
@@ -85,7 +83,6 @@ async def get_entity_neighbors(
                 e.rel_type,
                 e.from_type as neighbor_type,
                 e.from_id as neighbor_id,
-                e.confidence,
                 e.created_method,
                 e.score
             FROM edge e
@@ -114,7 +111,6 @@ async def get_entity_neighbors(
                 "neighbor_type": row.neighbor_type,
                 "neighbor_id": row.neighbor_id,
                 "direction": "incoming",
-                "confidence": row.confidence,
                 "created_method": row.created_method,
                 "score": row.score,
             })

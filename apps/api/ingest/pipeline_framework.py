@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from apps.api.ingest.docx_reader import DocxReader
+from apps.api.ingest.ocr_augment import augment_document_with_image_ocr
+from apps.api.llm.vision_ocr_azure import VisionOcrConfig
 from apps.api.ingest.rule_extractor import RuleExtractor
 from apps.api.ingest.evidence_parser import parse_evidence_text
 from apps.api.ingest.validator import validate_extraction, validate_evidence_refs, ValidationSeverity
@@ -119,7 +121,21 @@ def ingest_framework_docx(
         raise FileNotFoundError(str(docx_path))
 
     reader = DocxReader()
-    parsed = reader.read(docx_path)
+    # Read bytes so we can optionally OCR DOCX-embedded images.
+    docx_bytes = docx_path.read_bytes()
+    parsed = reader.read_bytes(docx_bytes, docx_path.name)
+
+    # OCR augmentation (ingestion-only) for image-based pages:
+    # In sync contexts (tests/CLI), only run OCR if explicitly enabled/configured.
+    mode = __import__("os").getenv("INGEST_OCR_FROM_IMAGES", "auto").strip().lower()
+    cfg = VisionOcrConfig.from_env()
+    should_run = (mode == "required") or (mode == "auto" and cfg.is_configured())
+    if should_run:
+        import asyncio
+
+        parsed, _ocr_stats = asyncio.run(
+            augment_document_with_image_ocr(parsed, docx_bytes)
+        )
 
     extractor = RuleExtractor(framework_version=framework_version)
     extracted = extractor.extract(parsed)

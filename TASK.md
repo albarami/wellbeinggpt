@@ -6,11 +6,13 @@
 
 | ID | Task | Status | Date Started | Date Completed |
 |----|------|--------|--------------|----------------|
-| - | All tasks completed | ✅ | - | - |
+| D1-1 | Ingest missing sections from image-based pages (OCR from DOCX media) and re-run ingestion | 🔄 In Progress | 2025-12-12 | - |
 
 ### Discovered During Work
 
-(None - implementation proceeded as planned)
+| ID | Task | Status | Date Started | Date Completed |
+|----|------|--------|--------------|----------------|
+| D1-1 | Ingest missing sections from image-based pages (OCR from DOCX media) and re-run ingestion | 🔄 In Progress | 2025-12-12 | - |
 
 ---
 
