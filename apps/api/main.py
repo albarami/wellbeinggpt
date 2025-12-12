@@ -4,10 +4,14 @@ Wellbeing Data Foundation API
 A zero-hallucination, evidence-only Arabic wellbeing assistant.
 """
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api.routes import ingest, ask
+
+# Load local .env (does not override real env vars by default)
+load_dotenv()
 
 app = FastAPI(
     title="Wellbeing Data Foundation API",
