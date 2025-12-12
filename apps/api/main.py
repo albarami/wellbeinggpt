@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from apps.api.routes import ingest, ask
+from apps.api.llm.gpt5_client_azure import ProviderConfig
 
 # Load local .env (does not override real env vars by default)
 load_dotenv()
@@ -36,7 +37,18 @@ app.include_router(ask.router, tags=["query"])
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "version": "0.1.0"}
+    cfg = ProviderConfig.from_env()
+    return {
+        "status": "healthy",
+        "version": "0.1.0",
+        "llm": {
+            "provider_type": cfg.provider_type.value,
+            "configured": cfg.is_configured(),
+            "deployment_name_set": bool(cfg.deployment_name),
+            "endpoint_set": bool(cfg.endpoint),
+            "api_version": cfg.api_version,
+        },
+    }
 
 
 @app.get("/")
