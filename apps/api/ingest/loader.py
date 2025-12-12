@@ -12,6 +12,9 @@ from typing import Any, Optional
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from apps.api.llm.embedding_client_azure import AzureEmbeddingClient, EmbeddingConfig
+from apps.api.retrieve.vector_retriever import store_embedding
+
 
 async def create_source_document(
     session: AsyncSession,
@@ -152,7 +155,11 @@ async def load_pillar(
             "name_en": pillar_data.get("name_en"),
             "description_ar": pillar_data.get("description_ar"),
             "source_doc_id": source_doc_id,
-            "source_anchor": json.dumps(pillar_data.get("source_anchor", {})),
+            "source_anchor": json.dumps(
+                {"source_anchor": pillar_data.get("source_anchor")}
+                if isinstance(pillar_data.get("source_anchor"), str)
+                else (pillar_data.get("source_anchor", {}) or {})
+            ),
             "run_id": run_id,
         }
     )
@@ -198,7 +205,11 @@ async def load_core_value(
             "name_en": cv_data.get("name_en"),
             "definition_ar": definition_ar,
             "source_doc_id": source_doc_id,
-            "source_anchor": json.dumps(cv_data.get("source_anchor", {})),
+            "source_anchor": json.dumps(
+                {"source_anchor": cv_data.get("source_anchor")}
+                if isinstance(cv_data.get("source_anchor"), str)
+                else (cv_data.get("source_anchor", {}) or {})
+            ),
             "run_id": run_id,
         }
     )
@@ -212,7 +223,11 @@ async def load_core_value(
             block_type="definition",
             text_ar=definition_ar,
             source_doc_id=source_doc_id,
-            source_anchor=cv_data["definition"].get("source_anchor", {}),
+            source_anchor=(
+                {"source_anchor": cv_data["definition"].get("source_anchor")}
+                if isinstance(cv_data["definition"].get("source_anchor"), str)
+                else (cv_data["definition"].get("source_anchor", {}) or {})
+            ),
             run_id=run_id,
         )
 
@@ -256,10 +271,31 @@ async def load_sub_value(
             "name_en": sv_data.get("name_en"),
             "definition_ar": definition_ar,
             "source_doc_id": source_doc_id,
-            "source_anchor": json.dumps(sv_data.get("source_anchor", {})),
+            "source_anchor": json.dumps(
+                {"source_anchor": sv_data.get("source_anchor")}
+                if isinstance(sv_data.get("source_anchor"), str)
+                else (sv_data.get("source_anchor", {}) or {})
+            ),
             "run_id": run_id,
         }
     )
+
+    # Load text block for definition
+    if definition_ar:
+        await load_text_block(
+            session,
+            entity_type="sub_value",
+            entity_id=sv_data["id"],
+            block_type="definition",
+            text_ar=definition_ar,
+            source_doc_id=source_doc_id,
+            source_anchor=(
+                {"source_anchor": sv_data["definition"].get("source_anchor")}
+                if isinstance(sv_data.get("definition", {}).get("source_anchor"), str)
+                else (sv_data.get("definition", {}).get("source_anchor", {}) or {})
+            ),
+            run_id=run_id,
+        )
 
 
 async def load_text_block(
@@ -439,11 +475,78 @@ async def load_canonical_json_to_db(
             )
             total_cv += 1
 
+            # Load evidence for core value
+            for ev in cv_data.get("evidence", []) or []:
+                await load_evidence(
+                    session=session,
+                    entity_type="core_value",
+                    entity_id=cv_data["id"],
+                    evidence_type=ev.get("evidence_type", "book"),
+                    ref_raw=ev.get("ref_raw", "") or "",
+                    ref_norm=ev.get("ref_norm"),
+                    text_ar=ev.get("text_ar", "") or "",
+                    source_doc_id=source_doc_id,
+                    source_anchor={"source_anchor": ev.get("source_anchor", "")},
+                    run_id=run_id,
+                    parse_status=ev.get("parse_status", "success"),
+                    surah_name_ar=ev.get("surah_name_ar"),
+                    surah_number=ev.get("surah_number"),
+                    ayah_number=ev.get("ayah_number"),
+                    hadith_collection=ev.get("hadith_collection"),
+                    hadith_number=ev.get("hadith_number"),
+                )
+                total_evidence += 1
+
             for sv_data in cv_data.get("sub_values", []):
                 await load_sub_value(
                     session, sv_data, cv_data["id"], source_doc_id, run_id
                 )
                 total_sv += 1
+
+                # Load evidence for sub value
+                for ev in sv_data.get("evidence", []) or []:
+                    await load_evidence(
+                        session=session,
+                        entity_type="sub_value",
+                        entity_id=sv_data["id"],
+                        evidence_type=ev.get("evidence_type", "book"),
+                        ref_raw=ev.get("ref_raw", "") or "",
+                        ref_norm=ev.get("ref_norm"),
+                        text_ar=ev.get("text_ar", "") or "",
+                        source_doc_id=source_doc_id,
+                        source_anchor={"source_anchor": ev.get("source_anchor", "")},
+                        run_id=run_id,
+                        parse_status=ev.get("parse_status", "success"),
+                        surah_name_ar=ev.get("surah_name_ar"),
+                        surah_number=ev.get("surah_number"),
+                        ayah_number=ev.get("ayah_number"),
+                        hadith_collection=ev.get("hadith_collection"),
+                        hadith_number=ev.get("hadith_number"),
+                    )
+                    total_evidence += 1
+
+    # Load chunks from generated JSONL if provided in meta (optional)
+    chunks_path = canonical_data.get("meta", {}).get("chunks_path")
+    total_chunks = 0
+    total_embeddings = 0
+    if chunks_path:
+        total_chunks = await load_chunks_jsonl(
+            session=session,
+            chunks_jsonl_path=chunks_path,
+            source_doc_id=source_doc_id,
+            run_id=run_id,
+        )
+        # Embed chunks (best-effort; if not configured, skip)
+        try:
+            total_embeddings = await embed_all_chunks_for_source(
+                session=session,
+                source_doc_id=source_doc_id,
+            )
+        except Exception:
+            total_embeddings = 0
+
+    # Build graph edges (hierarchy + evidence links)
+    await build_edges_for_source(session=session, source_doc_id=source_doc_id)
 
     # Complete ingestion run
     await complete_ingestion_run(
@@ -461,5 +564,171 @@ async def load_canonical_json_to_db(
         "core_values": total_cv,
         "sub_values": total_sv,
         "evidence": total_evidence,
+        "chunks": total_chunks,
+        "embeddings": total_embeddings,
     }
+
+
+async def load_chunks_jsonl(
+    session: AsyncSession,
+    chunks_jsonl_path: str,
+    source_doc_id: str,
+    run_id: str,
+) -> int:
+    """
+    Load chunks JSONL (Evidence Packets) into chunk + chunk_ref tables.
+    """
+    from pathlib import Path
+
+    path = Path(chunks_jsonl_path)
+    if not path.exists():
+        return 0
+
+    count = 0
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            row = json.loads(line)
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO chunk (chunk_id, entity_type, entity_id, chunk_type, text_ar, text_en,
+                                       source_doc_id, source_anchor, token_count_estimate)
+                    VALUES (:chunk_id, :entity_type, :entity_id, :chunk_type, :text_ar, :text_en,
+                            :source_doc_id, :source_anchor, :token_count_estimate)
+                    ON CONFLICT (chunk_id) DO UPDATE SET
+                        text_ar = EXCLUDED.text_ar,
+                        source_anchor = EXCLUDED.source_anchor
+                    """
+                ),
+                {
+                    "chunk_id": row["chunk_id"],
+                    "entity_type": row["entity_type"],
+                    "entity_id": row["entity_id"],
+                    "chunk_type": row["chunk_type"],
+                    "text_ar": row.get("text_ar", ""),
+                    "text_en": row.get("text_en"),
+                    "source_doc_id": source_doc_id,
+                    "source_anchor": row.get("source_anchor", ""),
+                    "token_count_estimate": int(row.get("token_count_estimate") or 0),
+                },
+            )
+            # chunk refs
+            for r in row.get("refs", []) or []:
+                await session.execute(
+                    text(
+                        """
+                        INSERT INTO chunk_ref (chunk_id, ref_type, ref)
+                        VALUES (:chunk_id, :ref_type, :ref)
+                        """
+                    ),
+                    {
+                        "chunk_id": row["chunk_id"],
+                        "ref_type": r.get("type", ""),
+                        "ref": r.get("ref", ""),
+                    },
+                )
+            count += 1
+    return count
+
+
+async def embed_all_chunks_for_source(
+    session: AsyncSession,
+    source_doc_id: str,
+    batch_size: int = 64,
+) -> int:
+    """
+    Embed all chunks for a given source_doc_id and upsert into embedding table.
+    """
+    cfg = EmbeddingConfig.from_env()
+    if not cfg.is_configured():
+        return 0
+    client = AzureEmbeddingClient(cfg)
+
+    # Fetch chunks
+    result = await session.execute(
+        text(
+            """
+            SELECT chunk_id, text_ar
+            FROM chunk
+            WHERE source_doc_id = :source_doc_id
+            ORDER BY chunk_id
+            """
+        ),
+        {"source_doc_id": source_doc_id},
+    )
+    rows = result.fetchall()
+    total = 0
+    for i in range(0, len(rows), batch_size):
+        batch = rows[i : i + batch_size]
+        texts = [r.text_ar for r in batch]
+        vecs = await client.embed_texts(texts)
+        for r, v in zip(batch, vecs):
+            await store_embedding(
+                session=session,
+                chunk_id=r.chunk_id,
+                vector=v,
+                model=cfg.embedding_deployment,
+                dims=cfg.dims,
+            )
+            total += 1
+    return total
+
+
+async def build_edges_for_source(session: AsyncSession, source_doc_id: str) -> None:
+    """
+    Build minimal graph edges in Postgres:
+    - Pillar CONTAINS CoreValue
+    - CoreValue CONTAINS SubValue
+    - (Core/Sub) SUPPORTED_BY Evidence
+    """
+    # CONTAINS: pillar -> core_value
+    await session.execute(
+        text(
+            """
+            INSERT INTO edge (from_type, from_id, rel_type, to_type, to_id,
+                              created_method, created_by, justification, status)
+            SELECT 'pillar', cv.pillar_id, 'CONTAINS', 'core_value', cv.id,
+                   'rule_exact_match', 'system', 'hierarchy', 'approved'
+            FROM core_value cv
+            WHERE cv.source_doc_id = :source_doc_id
+            ON CONFLICT DO NOTHING
+            """
+        ),
+        {"source_doc_id": source_doc_id},
+    )
+
+    # CONTAINS: core_value -> sub_value
+    await session.execute(
+        text(
+            """
+            INSERT INTO edge (from_type, from_id, rel_type, to_type, to_id,
+                              created_method, created_by, justification, status)
+            SELECT 'core_value', sv.core_value_id, 'CONTAINS', 'sub_value', sv.id,
+                   'rule_exact_match', 'system', 'hierarchy', 'approved'
+            FROM sub_value sv
+            WHERE sv.source_doc_id = :source_doc_id
+            ON CONFLICT DO NOTHING
+            """
+        ),
+        {"source_doc_id": source_doc_id},
+    )
+
+    # SUPPORTED_BY: entity -> evidence
+    await session.execute(
+        text(
+            """
+            INSERT INTO edge (from_type, from_id, rel_type, to_type, to_id,
+                              created_method, created_by, justification, status)
+            SELECT e.entity_type, e.entity_id, 'SUPPORTED_BY', 'evidence', e.id::text,
+                   'rule_exact_match', 'system', 'evidence_link', 'approved'
+            FROM evidence e
+            WHERE e.source_doc_id = :source_doc_id
+            ON CONFLICT DO NOTHING
+            """
+        ),
+        {"source_doc_id": source_doc_id},
+    )
 

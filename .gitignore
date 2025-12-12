@@ -66,4 +66,5 @@ data/outputs/
 data/derived/
 *.docx
 !tests/fixtures/*.docx
+!docs/source/*.docx
 

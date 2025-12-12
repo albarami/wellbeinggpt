@@ -185,9 +185,13 @@ class VectorRetriever:
         Returns:
             Query embedding vector.
         """
-        # TODO: Implement actual embedding generation via Azure OpenAI
-        # For now, return a placeholder
-        return [0.0] * self._embedding_dims
+        from apps.api.llm.embedding_client_azure import AzureEmbeddingClient, EmbeddingConfig
+
+        cfg = EmbeddingConfig.from_env()
+        self._embedding_dims = cfg.dims
+        client = AzureEmbeddingClient(cfg)
+        vecs = await client.embed_texts([query])
+        return vecs[0]
 
     async def search(
         self,

@@ -143,6 +143,11 @@ def ingest_framework_docx(
                         parsed_refs.append(type("X", (), {"parse_status": type("Y", (), {"value": e["parse_status"]})})())
     # (We validate via validate_evidence_refs in tests instead; keep canonical here.)
 
+    # Store derived file pointers (so loaders can rebuild from canonical JSON alone)
+    canonical.setdefault("meta", {})
+    canonical["meta"]["canonical_path"] = str(canonical_out_path)
+    canonical["meta"]["chunks_path"] = str(chunks_out_path)
+
     save_canonical_json(canonical, canonical_out_path)
 
     # Chunking

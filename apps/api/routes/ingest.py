@@ -5,8 +5,16 @@ Ingestion routes for document processing.
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-import uuid
 from datetime import datetime
+
+from apps.api.core.database import get_session
+from apps.api.ingest.docx_reader import DocxReader
+from apps.api.ingest.rule_extractor import RuleExtractor
+from apps.api.ingest.validator import validate_extraction, ValidationSeverity
+from apps.api.ingest.canonical_json import extraction_to_canonical_json
+from apps.api.ingest.pipeline_framework import _expand_evidence_in_canonical
+from apps.api.ingest.chunker import Chunker
+from apps.api.ingest.loader import load_canonical_json_to_db
 
 router = APIRouter()
 
@@ -54,17 +62,49 @@ async def ingest_docx(file: UploadFile = File(...)):
             detail="Only .docx files are supported",
         )
 
-    run_id = str(uuid.uuid4())
+    content = await file.read()
+    reader = DocxReader()
+    parsed = reader.read_bytes(content, file.filename)
 
-    # TODO: Implement actual ingestion pipeline in Phase 1
-    # This is a placeholder that will be replaced
+    extractor = RuleExtractor(framework_version="2025-10")
+    extracted = extractor.extract(parsed)
+
+    validation = validate_extraction(extracted, strict=True)
+    if not validation.is_valid:
+        errors = [i.message for i in validation.issues if i.severity == ValidationSeverity.ERROR]
+        raise HTTPException(status_code=400, detail={"errors": errors[:20]})
+
+    canonical = extraction_to_canonical_json(extracted)
+    canonical = _expand_evidence_in_canonical(canonical)
+
+    # Build chunks JSONL to local derived folder (optional, but used by loader)
+    from pathlib import Path
+    import os
+
+    derived_dir = Path("data/derived")
+    derived_dir.mkdir(parents=True, exist_ok=True)
+    base = Path(file.filename).stem
+    canonical_path = derived_dir / f"{base}.canonical.json"
+    chunks_path = derived_dir / f"{base}.chunks.jsonl"
+    canonical.setdefault("meta", {})
+    canonical["meta"]["canonical_path"] = str(canonical_path)
+    canonical["meta"]["chunks_path"] = str(chunks_path)
+
+    # Save canonical + chunks
+    from apps.api.ingest.canonical_json import save_canonical_json
+    save_canonical_json(canonical, canonical_path)
+    chunks = Chunker().chunk_canonical_json(canonical)
+    Chunker().save_chunks_jsonl(chunks, str(chunks_path))
+
+    async with get_session() as session:
+        summary = await load_canonical_json_to_db(session, canonical, file.filename)
 
     return IngestionRunResponse(
-        run_id=run_id,
-        status="pending",
+        run_id=summary["run_id"],
+        status="completed",
         source_file_name=file.filename,
         created_at=datetime.utcnow(),
-        message="Ingestion queued. Implementation pending Phase 1.",
+        message=f"Ingestion completed. pillars={summary['pillars']} core_values={summary['core_values']} sub_values={summary['sub_values']} chunks={summary.get('chunks',0)} embeddings={summary.get('embeddings',0)}",
     )
 
 
@@ -79,14 +119,35 @@ async def get_ingestion_run(run_id: str):
     Returns:
         IngestionRunStatus: Current status and statistics.
     """
-    # TODO: Implement actual status retrieval in Phase 1
+    # Best-effort status lookup from DB
+    async with get_session() as session:
+        from sqlalchemy import text
+        result = await session.execute(
+            text(
+                """
+                SELECT id, status, entities_extracted, evidence_extracted, validation_errors, created_at, completed_at
+                FROM ingestion_run
+                WHERE id = :id
+                """
+            ),
+            {"id": run_id},
+        )
+        row = result.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Run not found")
 
-    return IngestionRunStatus(
-        run_id=run_id,
-        status="pending",
-        entities_extracted=0,
-        evidence_extracted=0,
-        validation_errors=[],
-        created_at=datetime.utcnow(),
-    )
+        try:
+            errors = row.validation_errors if isinstance(row.validation_errors, list) else []
+        except Exception:
+            errors = []
+
+        return IngestionRunStatus(
+            run_id=str(row.id),
+            status=row.status,
+            entities_extracted=row.entities_extracted or 0,
+            evidence_extracted=row.evidence_extracted or 0,
+            validation_errors=errors,
+            created_at=row.created_at,
+            completed_at=row.completed_at,
+        )
 
