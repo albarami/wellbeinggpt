@@ -28,6 +28,7 @@ from apps.api.core.schemas import (
 )
 from apps.api.retrieve.normalize_ar import normalize_for_matching, extract_arabic_words
 from apps.api.retrieve.hybrid_retriever import HybridRetriever, RetrievalInputs
+from apps.api.llm.muhasibi_llm_client import MuhasibiLLMClient
 
 
 class MuhasibiState(Enum):
@@ -126,7 +127,7 @@ class MuhasibiMiddleware:
         """
         self.entity_resolver = entity_resolver
         self.retriever: Optional[HybridRetriever] = retriever
-        self.llm_client = llm_client
+        self.llm_client: Optional[MuhasibiLLMClient] = llm_client
         self.guardrails = guardrails
 
     async def process(self, question: str, language: str = "ar") -> FinalResponse:
@@ -231,10 +232,22 @@ class MuhasibiMiddleware:
 
         This state uses GPT-5 to generate structured purpose output.
         """
-        # Build purpose with required constraints
+        # Build purpose with required constraints (LLM preferred; fallback deterministic)
         if self.llm_client:
-            # TODO: Call LLM with structured output
-            pass
+            result = await self.llm_client.purpose_path(ctx.question)
+            if result:
+                # Ensure required constraints always present
+                constraints = list(dict.fromkeys(result.constraints_ar + self.REQUIRED_CONSTRAINTS))
+                ctx.purpose = Purpose(
+                    ultimate_goal_ar=result.ultimate_goal_ar,
+                    constraints_ar=constraints,
+                )
+                ctx.path_plan_ar = result.path_plan_ar
+                try:
+                    ctx.difficulty = Difficulty(result.difficulty)
+                except Exception:
+                    ctx.difficulty = Difficulty.MEDIUM
+                return MuhasibiState.RETRIEVE if ctx.path_plan_ar else MuhasibiState.PATH
 
         # Default purpose with required constraints
         ctx.purpose = Purpose(
@@ -345,8 +358,28 @@ class MuhasibiMiddleware:
             return MuhasibiState.REFLECT
 
         if self.llm_client and ctx.evidence_packets:
-            # TODO: Call LLM with evidence packets
-            pass
+            result = await self.llm_client.interpret(
+                question=ctx.question,
+                evidence_packets=ctx.evidence_packets,
+                detected_entities=ctx.detected_entities,
+            )
+            if result:
+                ctx.answer_ar = result.answer_ar
+                ctx.not_found = bool(result.not_found)
+                try:
+                    ctx.confidence = Confidence(result.confidence)
+                except Exception:
+                    ctx.confidence = Confidence.MEDIUM
+                # Map citations into Pydantic Citation objects
+                ctx.citations = [
+                    Citation(
+                        chunk_id=c.get("chunk_id", ""),
+                        source_anchor=c.get("source_anchor", ""),
+                        ref=c.get("ref"),
+                    )
+                    for c in result.citations
+                    if c.get("chunk_id") and c.get("source_anchor")
+                ]
 
         # Deterministic fallback answer if evidence exists but no LLM call occurred.
         if not ctx.answer_ar and ctx.evidence_packets:

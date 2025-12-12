@@ -12,6 +12,8 @@ from apps.api.core.database import get_session
 from apps.api.core.muhasibi_state_machine import create_middleware
 from apps.api.core.schemas import FinalResponse
 from apps.api.guardrails.citation_enforcer import Guardrails
+from apps.api.llm.gpt5_client_azure import ProviderConfig, create_provider
+from apps.api.llm.muhasibi_llm_client import MuhasibiLLMClient
 from apps.api.retrieve.entity_resolver import EntityResolver
 from apps.api.retrieve.hybrid_retriever import HybridRetriever
 
@@ -150,10 +152,19 @@ async def ask_question(request: AskRequest):
         # Attach session for middleware retrieval (keeps middleware signature stable for tests)
         retriever._session = session  # type: ignore[attr-defined]
 
+        llm_client = None
+        try:
+            cfg = ProviderConfig.from_env()
+            if cfg.is_configured():
+                provider = create_provider(cfg)
+                llm_client = MuhasibiLLMClient(provider)
+        except Exception:
+            llm_client = None
+
         middleware = create_middleware(
             entity_resolver=resolver,
             retriever=retriever,
-            llm_client=None,  # optional; deterministic fallback is used if not configured
+            llm_client=llm_client,  # uses Azure/OpenAI if configured; else deterministic fallback
             guardrails=guardrails,
         )
 
