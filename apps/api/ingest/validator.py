@@ -212,9 +212,16 @@ class Validator:
                 )
             )
 
-        # Check definition if required
+        # Check definition if required.
+        #
+        # Important nuance for this framework DOCX:
+        # - Many core values are "containers" whose definitions live in sub-values.
+        # - In that case, requiring a core-value-level "المفهوم" would incorrectly fail ingestion.
+        # We therefore require a core-value definition only when it is not acting as a container
+        # (i.e., it has no sub-values).
         if self.require_definitions:
-            if not cv.definition or not cv.definition.text_ar.strip():
+            core_has_subvalues = bool(cv.sub_values)
+            if (not core_has_subvalues) and (not cv.definition or not cv.definition.text_ar.strip()):
                 issues.append(
                     ValidationIssue(
                         severity=ValidationSeverity.ERROR,
@@ -226,7 +233,7 @@ class Validator:
                         field="definition",
                     )
                 )
-            elif len(cv.definition.text_ar) > self.max_definition_length:
+            elif cv.definition and len(cv.definition.text_ar) > self.max_definition_length:
                 issues.append(
                     ValidationIssue(
                         severity=ValidationSeverity.WARNING,

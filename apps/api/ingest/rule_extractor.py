@@ -88,6 +88,8 @@ EVIDENCE_MARKERS = [
     "التأصيل :",
     "الأدلة:",
     "الأدلة :",
+    "الدليل:",
+    "الدليل :",
     "الشواهد:",
     "الشواهد :",
 ]
@@ -309,6 +311,19 @@ class RuleExtractor:
             self._handle_sub_values_list()
             return
 
+        # After pillar/list transitions, detect core/sub headings (context-sensitive)
+        # Detect core value headings that don't use "القيم الكلية" lists (common in this DOCX)
+        if self._is_core_value_heading(text) and self.current_pillar:
+            self._finalize_definition_and_evidence()
+            self._start_core_value_from_heading(para, doc_hash, source_doc, text)
+            return
+
+        # Detect sub-value headings inside a core value (e.g., "التوحيد:" / "العزة")
+        if self._is_sub_value_heading(text) and self.current_core_value:
+            self._finalize_definition_and_evidence()
+            self._start_sub_value_from_heading(para, doc_hash, source_doc, text)
+            return
+
         if self._is_definition_marker(text):
             self._handle_definition_start(para, doc_hash, source_doc, text)
             return
@@ -319,6 +334,119 @@ class RuleExtractor:
 
         # Continue current section
         self._continue_current_section(para, doc_hash, source_doc, text)
+
+    def _is_core_value_heading(self, text: str) -> bool:
+        """
+        Heuristic detection for core value headings in the framework.
+
+        Examples:
+        - "أولًا: قيمة الإيمان"
+        - "ثانيا: قيمة العبادة"
+        - "أولاً: التوازن العاطفي   Emotional Balance"
+        - "أولا. البحث عن الحقيقة"
+        """
+        t = text.strip()
+        if len(t) > 120:
+            return False
+        # Must begin with ordinal/numbering pattern
+        if not re.match(r"^(أولا|أولًا|أولاً|ثانيا|ثانيًا|ثالثا|ثالثًا|رابعا|خامسا|سادسا|سابعا|ثامنا|تاسعا|عاشرا|[0-9\u0660-\u0669]+)[.\s:：\-]+", t):
+            return False
+        # Exclude pillar headings already handled
+        if self._is_pillar_marker(t):
+            return False
+        # Exclude anything that looks like a "life pillar" heading even if regex misses
+        n = normalize_for_matching(t)
+        if normalize_for_matching("الحياة") in n and normalize_for_matching("الطيبة") in n:
+            return False
+        # Exclude list headings ("القيم ...")
+        if normalize_for_matching(t).startswith(normalize_for_matching("القيم")):
+            return False
+        return True
+
+    def _start_core_value_from_heading(self, para: ParsedParagraph, doc_hash: str, source_doc: str, text: str) -> None:
+        self.core_value_counter += 1
+        cv_id = f"CV{self.core_value_counter:03d}"
+        name = text.strip()
+        # Strip ordinal and the word "قيمة" if present
+        name = re.sub(r"^(أولا|أولًا|أولاً|ثانيا|ثانيًا|ثالثا|ثالثًا|رابعا|خامسا|سادسا|سابعا|ثامنا|تاسعا|عاشرا|[0-9\u0660-\u0669]+)[.\s:：\-]+", "", name).strip()
+        name = re.sub(r"^\s*قيمة\s+", "", name).strip()
+        # Remove English tail if present after multiple spaces
+        if "  " in name:
+            name = name.split("  ")[0].strip()
+        cv = ExtractedCoreValue(
+            id=cv_id,
+            name_ar=name if name else text.strip(),
+            source_doc=source_doc,
+            source_hash=doc_hash,
+            source_anchor=para.source_anchor,
+            raw_text=text,
+            para_index=para.para_index,
+        )
+        if self.current_pillar:
+            self.current_pillar.core_values.append(cv)
+            self.current_core_value = cv
+            self.current_sub_value = None
+            self.state = ExtractorState.IN_CORE_VALUE
+
+    def _is_sub_value_heading(self, text: str) -> bool:
+        """
+        Heuristic detection for sub-value headings inside a core value.
+
+        Examples:
+        - "التوحيد:"
+        - "العلم عن الله:"
+        - "الإخلاص"
+        - "التغذية السليمة"
+        """
+        t = text.strip()
+        if not t or len(t) > 80:
+            return False
+        # Exclude section markers
+        if self._is_definition_marker(t) or self._is_evidence_marker(t):
+            return False
+        # Exclude common headings that are not entities
+        banned = {
+            normalize_for_matching("المفهوم"),
+            normalize_for_matching("المفهوم:"),
+            normalize_for_matching("التأصيل"),
+            normalize_for_matching("التأصيل:"),
+            normalize_for_matching("الدليل"),
+            normalize_for_matching("الدليل:"),
+            normalize_for_matching("التعريف"),
+            normalize_for_matching("التعريف:"),
+        }
+        if normalize_for_matching(t) in banned:
+            return False
+        # Exclude verses/hadith lines
+        if t.startswith("﴿") or t.startswith("{") or t.startswith("(") or t.startswith("«"):
+            return False
+        if t.startswith("قال") or t.startswith("وقال") or t.startswith("يقول") or t.startswith("وفي الحديث"):
+            return False
+        # Headings often end with ":" or are short standalone lines
+        if t.endswith(":") or t.endswith("："):
+            return True
+        # List-paragraph style short headings (often without colon)
+        if len(t.split()) <= 4 and not self._looks_like_list_item(t):
+            return True
+        return False
+
+    def _start_sub_value_from_heading(self, para: ParsedParagraph, doc_hash: str, source_doc: str, text: str) -> None:
+        self.sub_value_counter += 1
+        sv_id = f"SV{self.sub_value_counter:03d}"
+        name = text.strip().rstrip(":：").strip()
+        sv = ExtractedSubValue(
+            id=sv_id,
+            name_ar=name if name else text.strip(),
+            source_doc=source_doc,
+            source_hash=doc_hash,
+            source_anchor=para.source_anchor,
+            raw_text=text,
+            para_index=para.para_index,
+        )
+        if self.current_core_value:
+            self.current_core_value.sub_values.append(sv)
+            self.current_sub_value = sv
+            self.state = ExtractorState.IN_SUB_VALUE
 
     def _is_pillars_list_marker(self, normalized_text: str) -> bool:
         """Check if text marks the start of pillars list."""
