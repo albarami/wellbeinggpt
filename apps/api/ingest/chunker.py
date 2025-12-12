@@ -136,6 +136,7 @@ class Chunker:
                     text_ar=text_chunk,
                     source_doc_id=source_doc_id,
                     source_anchor=self._get_anchor_str(definition.get("source_anchor")),
+                    refs=list(definition.get("refs") or []),
                 )
                 chunks.append(chunk)
 
@@ -180,6 +181,7 @@ class Chunker:
                     text_ar=text_chunk,
                     source_doc_id=source_doc_id,
                     source_anchor=self._get_anchor_str(definition.get("source_anchor")),
+                    refs=list(definition.get("refs") or []),
                 )
                 chunks.append(chunk)
 

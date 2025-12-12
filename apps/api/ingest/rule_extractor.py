@@ -137,6 +137,8 @@ class ExtractedDefinition:
     source_anchor: str
     raw_text: str
     para_indices: list[int] = field(default_factory=list)
+    # Bibliographic refs for this definition (e.g., تفسير الطبري...).
+    refs: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -233,6 +235,8 @@ class RuleExtractor:
         # Accumulators store both raw_text and cleaned_text (for definition/evidence markers)
         self.current_definition_paras: list[dict] = []  # {"raw": str, "clean": str, "i": int, "a": str}
         self.current_evidence_paras: list[dict] = []  # {"raw": str, "clean": str, "i": int, "a": str}
+        # Footnote/bibliography refs encountered while in a definition/evidence block
+        self.current_block_refs: list[dict] = []
 
         # Counters for ID generation
         self.pillar_counter = 0
@@ -807,6 +811,7 @@ class RuleExtractor:
     ) -> None:
         """Handle start of a definition block."""
         self._finalize_definition_and_evidence()
+        self.current_block_refs = []
 
         raw_line = text
         clean = text
@@ -830,6 +835,7 @@ class RuleExtractor:
         """Handle start of an evidence block."""
         # Finalize any pending definition first
         self._finalize_definition(doc_hash)
+        self.current_block_refs = []
 
         raw_line = text
         clean = text
@@ -851,6 +857,12 @@ class RuleExtractor:
         self, para: ParsedParagraph, doc_hash: str, source_doc: str, text: str
     ) -> None:
         """Continue accumulating content in current section."""
+        # Capture footnote/bibliography references (usually numbered) without polluting definition/evidence text.
+        if re.match(r"^\d+\s+.+", text.strip()) and (
+            self.state in (ExtractorState.IN_DEFINITION, ExtractorState.IN_EVIDENCE)
+        ):
+            self.current_block_refs.append({"type": "book", "ref": text.strip()})
+            return
         if self.state == ExtractorState.IN_DEFINITION:
             self.current_definition_paras.append({
                 "raw": text,
@@ -1179,6 +1191,7 @@ class RuleExtractor:
             source_anchor=first.get("a", ""),
             raw_text=raw_text,
             para_indices=para_indices,
+            refs=list(self.current_block_refs),
         )
 
         # Assign to current entity
@@ -1188,6 +1201,7 @@ class RuleExtractor:
             self.current_core_value.definition = definition
 
         self.current_definition_paras = []
+        self.current_block_refs = []
 
     def _finalize_evidence(self) -> None:
         """Finalize the current evidence block."""
@@ -1217,4 +1231,5 @@ class RuleExtractor:
             self.current_core_value.evidence.append(block)
 
         self.current_evidence_paras = []
+        self.current_block_refs = []
 

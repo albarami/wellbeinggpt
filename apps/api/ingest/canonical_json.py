@@ -133,6 +133,7 @@ def _definition_to_dict(definition: ExtractedDefinition) -> dict[str, Any]:
         "source_anchor": definition.source_anchor,
         "raw_text": definition.raw_text,
         "para_indices": definition.para_indices,
+        "refs": definition.refs or [],
     }
 
 
