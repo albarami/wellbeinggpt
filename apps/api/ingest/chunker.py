@@ -302,14 +302,38 @@ class Chunker:
         return int(words * 1.5)
 
     def _get_anchor_str(self, anchor: Any) -> str:
-        """Convert anchor to string."""
+        """
+        Convert stored anchor into the required string form.
+
+        For this phase, we require: "para_<index>".
+        """
         if anchor is None:
             return "unknown"
-
+        if isinstance(anchor, str):
+            return anchor or "unknown"
         if isinstance(anchor, dict):
-            return anchor.get("anchor_id", "unknown")
+            # Back-compat if older anchor dict exists
+            if isinstance(anchor.get("source_anchor"), str):
+                return anchor["source_anchor"] or "unknown"
+            if isinstance(anchor.get("anchor_id"), str):
+                return anchor["anchor_id"] or "unknown"
+        s = str(anchor)
+        return s if s else "unknown"
 
-        return str(anchor)
+    def save_chunks_jsonl(self, chunks: list[Chunk], output_path: str) -> None:
+        """
+        Save chunks to JSONL file.
+
+        Each line is a dict compatible with Evidence Packet schema.
+        """
+        from pathlib import Path
+        import json
+
+        path = Path(output_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            for c in chunks:
+                f.write(json.dumps(chunk_to_evidence_packet(c), ensure_ascii=False) + "\n")
 
 
 def chunk_to_dict(chunk: Chunk) -> dict[str, Any]:

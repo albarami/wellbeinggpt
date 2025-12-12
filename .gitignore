@@ -63,6 +63,7 @@ Thumbs.db
 # Project specific
 data/uploads/
 data/outputs/
+data/derived/
 *.docx
 !tests/fixtures/*.docx
 

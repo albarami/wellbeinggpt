@@ -448,12 +448,12 @@ class EvidenceParser:
             number_str = match.group(2)
             number = int(number_str) if number_str else 0
 
-            if number > 0:
-                ref = self._create_hadith_ref(
-                    collection_raw, number, match.group(0)
-                )
-                if ref:
-                    refs.append(ref)
+            # Accept even if number is missing (0), mark as needs_review
+            ref = self._create_hadith_ref(
+                collection_raw, number, match.group(0)
+            )
+            if ref:
+                refs.append(ref)
 
         return refs
 
@@ -474,7 +474,7 @@ class EvidenceParser:
                 number=number,
                 ref_raw=ref_raw,
                 ref_norm=ref_norm,
-                parse_status=ParseStatus.SUCCESS,
+                parse_status=ParseStatus.SUCCESS if number > 0 else ParseStatus.NEEDS_REVIEW,
             )
         else:
             # Check if it looks like a hadith collection
@@ -502,7 +502,11 @@ class EvidenceParser:
 
         normalized = normalize_for_matching(name)
         for key, value in HADITH_COLLECTIONS.items():
-            if normalize_for_matching(key) == normalized:
+            key_norm = normalize_for_matching(key)
+            if key_norm == normalized:
+                return value
+            # Allow extra honorifics/phrases: match collection name as substring
+            if key_norm and key_norm in normalized:
                 return value
 
         return None

@@ -67,6 +67,7 @@ class TestValidatorStructure:
         result = ExtractionResult(
             source_doc_id="DOC_test",
             source_file_hash="test",
+            source_doc="docs/source/framework_2025-10_v1.docx",
             framework_version="2025-10",
             pillars=[],
         )
@@ -82,6 +83,7 @@ class TestValidatorStructure:
         result = ExtractionResult(
             source_doc_id="DOC_test",
             source_file_hash="test",
+            source_doc="docs/source/framework_2025-10_v1.docx",
             framework_version="2025-10",
             pillars=[],
         )
@@ -101,12 +103,16 @@ class TestValidatorPillar:
         pillar = ExtractedPillar(
             id="P001",
             name_ar="",  # Empty name
-            source_anchor={},
+            source_doc="docs/source/framework_2025-10_v1.docx",
+            source_hash="test",
+            source_anchor="para_0",
+            raw_text="",
             para_index=0,
         )
         result = ExtractionResult(
             source_doc_id="DOC_test",
             source_file_hash="test",
+            source_doc="docs/source/framework_2025-10_v1.docx",
             framework_version="2025-10",
             pillars=[pillar],
         )
@@ -125,13 +131,17 @@ class TestValidatorPillar:
         pillar = ExtractedPillar(
             id="P001",
             name_ar="الحياة الروحية",
-            source_anchor={},
+            source_doc="docs/source/framework_2025-10_v1.docx",
+            source_hash="test",
+            source_anchor="para_0",
+            raw_text="الحياة الروحية",
             para_index=0,
             core_values=[],
         )
         result = ExtractionResult(
             source_doc_id="DOC_test",
             source_file_hash="test",
+            source_doc="docs/source/framework_2025-10_v1.docx",
             framework_version="2025-10",
             pillars=[pillar],
         )
@@ -152,19 +162,26 @@ class TestValidatorCoreValue:
         cv = ExtractedCoreValue(
             id="CV001",
             name_ar="",  # Empty
-            source_anchor={},
+            source_doc="docs/source/framework_2025-10_v1.docx",
+            source_hash="test",
+            source_anchor="para_1",
+            raw_text="",
             para_index=1,
         )
         pillar = ExtractedPillar(
             id="P001",
             name_ar="الحياة الروحية",
-            source_anchor={},
+            source_doc="docs/source/framework_2025-10_v1.docx",
+            source_hash="test",
+            source_anchor="para_0",
+            raw_text="الحياة الروحية",
             para_index=0,
             core_values=[cv],
         )
         result = ExtractionResult(
             source_doc_id="DOC_test",
             source_file_hash="test",
+            source_doc="docs/source/framework_2025-10_v1.docx",
             framework_version="2025-10",
             pillars=[pillar],
         )
@@ -183,20 +200,27 @@ class TestValidatorCoreValue:
         cv = ExtractedCoreValue(
             id="CV001",
             name_ar="الإيمان",
-            source_anchor={},
+            source_doc="docs/source/framework_2025-10_v1.docx",
+            source_hash="test",
+            source_anchor="para_1",
+            raw_text="الإيمان",
             para_index=1,
             definition=None,
         )
         pillar = ExtractedPillar(
             id="P001",
             name_ar="الحياة الروحية",
-            source_anchor={},
+            source_doc="docs/source/framework_2025-10_v1.docx",
+            source_hash="test",
+            source_anchor="para_0",
+            raw_text="الحياة الروحية",
             para_index=0,
             core_values=[cv],
         )
         result = ExtractionResult(
             source_doc_id="DOC_test",
             source_file_hash="test",
+            source_doc="docs/source/framework_2025-10_v1.docx",
             framework_version="2025-10",
             pillars=[pillar],
         )
@@ -215,20 +239,27 @@ class TestValidatorCoreValue:
         cv = ExtractedCoreValue(
             id="CV001",
             name_ar="الإيمان",
-            source_anchor={},
+            source_doc="docs/source/framework_2025-10_v1.docx",
+            source_hash="test",
+            source_anchor="para_1",
+            raw_text="الإيمان",
             para_index=1,
             definition=None,
         )
         pillar = ExtractedPillar(
             id="P001",
             name_ar="الحياة الروحية",
-            source_anchor={},
+            source_doc="docs/source/framework_2025-10_v1.docx",
+            source_hash="test",
+            source_anchor="para_0",
+            raw_text="الحياة الروحية",
             para_index=0,
             core_values=[cv],
         )
         result = ExtractionResult(
             source_doc_id="DOC_test",
             source_file_hash="test",
+            source_doc="docs/source/framework_2025-10_v1.docx",
             framework_version="2025-10",
             pillars=[pillar],
         )
@@ -247,18 +278,25 @@ class TestValidatorDuplicates:
         pillar1 = ExtractedPillar(
             id="P001",
             name_ar="الحياة الروحية",
-            source_anchor={},
+            source_doc="docs/source/framework_2025-10_v1.docx",
+            source_hash="test",
+            source_anchor="para_0",
+            raw_text="الحياة الروحية",
             para_index=0,
         )
         pillar2 = ExtractedPillar(
             id="P002",
             name_ar="الحياة الروحية",  # Duplicate
-            source_anchor={},
+            source_doc="docs/source/framework_2025-10_v1.docx",
+            source_hash="test",
+            source_anchor="para_10",
+            raw_text="الحياة الروحية",
             para_index=10,
         )
         result = ExtractionResult(
             source_doc_id="DOC_test",
             source_file_hash="test",
+            source_doc="docs/source/framework_2025-10_v1.docx",
             framework_version="2025-10",
             pillars=[pillar1, pillar2],
         )
@@ -274,18 +312,25 @@ class TestValidatorDuplicates:
         pillar1 = ExtractedPillar(
             id="P001",
             name_ar="الحياة الروحية",
-            source_anchor={},
+            source_doc="docs/source/framework_2025-10_v1.docx",
+            source_hash="test",
+            source_anchor="para_0",
+            raw_text="الحياة الروحية",
             para_index=0,
         )
         pillar2 = ExtractedPillar(
             id="P002",
             name_ar="الحياة الروحية",
-            source_anchor={},
+            source_doc="docs/source/framework_2025-10_v1.docx",
+            source_hash="test",
+            source_anchor="para_10",
+            raw_text="الحياة الروحية",
             para_index=10,
         )
         result = ExtractionResult(
             source_doc_id="DOC_test",
             source_file_hash="test",
+            source_doc="docs/source/framework_2025-10_v1.docx",
             framework_version="2025-10",
             pillars=[pillar1, pillar2],
         )
@@ -304,27 +349,43 @@ class TestValidatorSubValue:
         sv = ExtractedSubValue(
             id="SV001",
             name_ar="",  # Empty
-            source_anchor={},
+            source_doc="docs/source/framework_2025-10_v1.docx",
+            source_hash="test",
+            source_anchor="para_2",
+            raw_text="",
             para_index=2,
         )
         cv = ExtractedCoreValue(
             id="CV001",
             name_ar="الإيمان",
-            source_anchor={},
+            source_doc="docs/source/framework_2025-10_v1.docx",
+            source_hash="test",
+            source_anchor="para_1",
+            raw_text="الإيمان",
             para_index=1,
-            definition=ExtractedDefinition(text_ar="تعريف", source_anchor={}),
+            definition=ExtractedDefinition(
+                text_ar="تعريف",
+                source_doc="docs/source/framework_2025-10_v1.docx",
+                source_hash="test",
+                source_anchor="para_3",
+                raw_text="تعريف",
+            ),
             sub_values=[sv],
         )
         pillar = ExtractedPillar(
             id="P001",
             name_ar="الحياة الروحية",
-            source_anchor={},
+            source_doc="docs/source/framework_2025-10_v1.docx",
+            source_hash="test",
+            source_anchor="para_0",
+            raw_text="الحياة الروحية",
             para_index=0,
             core_values=[cv],
         )
         result = ExtractionResult(
             source_doc_id="DOC_test",
             source_file_hash="test",
+            source_doc="docs/source/framework_2025-10_v1.docx",
             framework_version="2025-10",
             pillars=[pillar],
         )
@@ -404,20 +465,27 @@ class TestValidateExtractionConvenience:
         cv = ExtractedCoreValue(
             id="CV001",
             name_ar="الإيمان",
-            source_anchor={},
+            source_doc="docs/source/framework_2025-10_v1.docx",
+            source_hash="test",
+            source_anchor="para_1",
+            raw_text="الإيمان",
             para_index=1,
             definition=None,
         )
         pillar = ExtractedPillar(
             id="P001",
             name_ar="الحياة الروحية",
-            source_anchor={},
+            source_doc="docs/source/framework_2025-10_v1.docx",
+            source_hash="test",
+            source_anchor="para_0",
+            raw_text="الحياة الروحية",
             para_index=0,
             core_values=[cv],
         )
         result = ExtractionResult(
             source_doc_id="DOC_test",
             source_file_hash="test",
+            source_doc="docs/source/framework_2025-10_v1.docx",
             framework_version="2025-10",
             pillars=[pillar],
         )

@@ -33,7 +33,7 @@ class TestChunker:
                 "id": "P001",
                 "name_ar": "الحياة الروحية",
                 "description_ar": "وصف الركيزة الروحية",
-                "source_anchor": {"anchor_id": "p0_abc"},
+                "source_anchor": "para_0",
                 "core_values": [],
             }]
         }
@@ -58,7 +58,7 @@ class TestChunker:
                     "name_ar": "الإيمان",
                     "definition": {
                         "text_ar": "تعريف الإيمان هو التصديق والإقرار",
-                        "source_anchor": {"anchor_id": "p1_def"},
+                        "source_anchor": "para_1",
                     },
                     "sub_values": [],
                 }],
@@ -88,7 +88,7 @@ class TestChunker:
                         "name_ar": "التوحيد",
                         "definition": {
                             "text_ar": "التوحيد هو إفراد الله بالعبادة",
-                            "source_anchor": {"anchor_id": "p2_sv"},
+                            "source_anchor": "para_2",
                         },
                     }],
                 }],

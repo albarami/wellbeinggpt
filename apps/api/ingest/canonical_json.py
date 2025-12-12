@@ -40,6 +40,8 @@ def extraction_to_canonical_json(
         "meta": {
             "source_doc_id": result.source_doc_id,
             "source_file_hash": result.source_file_hash,
+            "source_doc": result.source_doc,
+            "source_hash": result.source_file_hash,
             "framework_version": result.framework_version,
             "extracted_at": datetime.utcnow().isoformat(),
             "stats": {
@@ -67,7 +69,10 @@ def _pillar_to_dict(
         "name_ar": pillar.name_ar,
         "name_en": None,  # Nullable per MVP policy
         "description_ar": pillar.description_ar,
+        "source_doc": pillar.source_doc,
+        "source_hash": pillar.source_hash,
         "source_anchor": pillar.source_anchor,
+        "raw_text": pillar.raw_text,
         "para_index": pillar.para_index,
         "core_values": [
             _core_value_to_dict(cv, evidence_map)
@@ -86,7 +91,10 @@ def _core_value_to_dict(
         "name_ar": cv.name_ar,
         "name_en": None,
         "definition": _definition_to_dict(cv.definition) if cv.definition else None,
+        "source_doc": cv.source_doc,
+        "source_hash": cv.source_hash,
         "source_anchor": cv.source_anchor,
+        "raw_text": cv.raw_text,
         "para_index": cv.para_index,
         "evidence": _evidence_list_to_dict(cv.evidence) if cv.evidence else [],
         "sub_values": [
@@ -106,7 +114,10 @@ def _sub_value_to_dict(
         "name_ar": sv.name_ar,
         "name_en": None,
         "definition": _definition_to_dict(sv.definition) if sv.definition else None,
+        "source_doc": sv.source_doc,
+        "source_hash": sv.source_hash,
         "source_anchor": sv.source_anchor,
+        "raw_text": sv.raw_text,
         "para_index": sv.para_index,
         "evidence": _evidence_list_to_dict(sv.evidence) if sv.evidence else [],
     }
@@ -117,7 +128,10 @@ def _definition_to_dict(definition: ExtractedDefinition) -> dict[str, Any]:
     return {
         "text_ar": definition.text_ar,
         "text_en": None,
+        "source_doc": definition.source_doc,
+        "source_hash": definition.source_hash,
         "source_anchor": definition.source_anchor,
+        "raw_text": definition.raw_text,
         "para_indices": definition.para_indices,
     }
 
@@ -134,7 +148,10 @@ def _evidence_to_dict(evidence) -> dict[str, Any]:
             "evidence_type": evidence.evidence_type,
             "ref_raw": evidence.ref_raw,
             "text_ar": evidence.text_ar,
+            "source_doc": evidence.source_doc,
+            "source_hash": evidence.source_hash,
             "source_anchor": evidence.source_anchor,
+            "raw_text": evidence.raw_text,
             "para_index": evidence.para_index,
         }
     return {}

@@ -23,12 +23,16 @@ class TestCanonicalJsonExport:
         result = ExtractionResult(
             source_doc_id="DOC_test",
             source_file_hash="abc123",
+            source_doc="docs/source/framework_2025-10_v1.docx",
             framework_version="2025-10",
             pillars=[
                 ExtractedPillar(
                     id="P001",
                     name_ar="الحياة الروحية",
-                    source_anchor={},
+                    source_doc="docs/source/framework_2025-10_v1.docx",
+                    source_hash="abc123",
+                    source_anchor="para_0",
+                    raw_text="الحياة الروحية",
                     para_index=0,
                 )
             ],
