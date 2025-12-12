@@ -14,6 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from apps.api.llm.embedding_client_azure import AzureEmbeddingClient, EmbeddingConfig
 from apps.api.retrieve.vector_retriever import store_embedding
+from apps.api.retrieve.azure_search_indexer import (
+    ensure_index as ensure_azure_search_index,
+    upsert_documents as azure_search_upsert_documents,
+    chunk_doc as azure_search_chunk_doc,
+    is_configured as azure_search_is_configured,
+)
+import os
 
 
 async def create_source_document(
@@ -647,11 +654,17 @@ async def embed_all_chunks_for_source(
         return 0
     client = AzureEmbeddingClient(cfg)
 
+    vector_backend = os.getenv("VECTOR_BACKEND", "disabled").lower()
+    azure_search_enabled = vector_backend == "azure_search" and azure_search_is_configured()
+    if azure_search_enabled:
+        # Best-effort ensure index exists
+        await ensure_azure_search_index(cfg.dims)
+
     # Fetch chunks
     result = await session.execute(
         text(
             """
-            SELECT chunk_id, text_ar
+            SELECT chunk_id, entity_type, entity_id, chunk_type, text_ar, source_anchor
             FROM chunk
             WHERE source_doc_id = :source_doc_id
             ORDER BY chunk_id
@@ -663,8 +676,28 @@ async def embed_all_chunks_for_source(
     total = 0
     for i in range(0, len(rows), batch_size):
         batch = rows[i : i + batch_size]
-        texts = [r.text_ar for r in batch]
+        texts = [r.text_ar or "" for r in batch]
         vecs = await client.embed_texts(texts)
+
+        # Pre-fetch refs for this batch (chunk_ref table)
+        chunk_ids = [r.chunk_id for r in batch]
+        refs_by_chunk: dict[str, list[dict[str, Any]]] = {cid: [] for cid in chunk_ids}
+        ref_rows = (
+            await session.execute(
+                text(
+                    """
+                    SELECT chunk_id, ref_type, ref
+                    FROM chunk_ref
+                    WHERE chunk_id = ANY(:chunk_ids)
+                    """
+                ),
+                {"chunk_ids": chunk_ids},
+            )
+        ).fetchall()
+        for rr in ref_rows:
+            refs_by_chunk[str(rr.chunk_id)].append({"type": rr.ref_type, "ref": rr.ref})
+
+        azure_docs: list[dict[str, Any]] = []
         for r, v in zip(batch, vecs):
             await store_embedding(
                 session=session,
@@ -673,7 +706,24 @@ async def embed_all_chunks_for_source(
                 model=cfg.embedding_deployment,
                 dims=cfg.dims,
             )
+            if azure_search_enabled:
+                azure_docs.append(
+                    azure_search_chunk_doc(
+                        chunk_id=str(r.chunk_id),
+                        entity_type=str(r.entity_type),
+                        entity_id=str(r.entity_id),
+                        chunk_type=str(r.chunk_type),
+                        text_ar=str(r.text_ar or ""),
+                        source_doc_id=str(source_doc_id),
+                        source_anchor=str(r.source_anchor or ""),
+                        refs=refs_by_chunk.get(str(r.chunk_id), []),
+                        vector=[float(x) for x in v],
+                    )
+                )
             total += 1
+
+        if azure_search_enabled and azure_docs:
+            await azure_search_upsert_documents(azure_docs)
     return total
 
 

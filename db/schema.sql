@@ -3,7 +3,8 @@
 
 -- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgvector";
+-- NOTE: pgvector ("vector" extension) is not available on all Windows Postgres installs.
+-- This schema is compatible without pgvector. For enterprise vector search, use Azure AI Search.
 
 -- =============================================================================
 -- Source Documents and Ingestion
@@ -151,15 +152,17 @@ CREATE INDEX idx_chunk_type ON chunk(chunk_type);
 CREATE TABLE embedding (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     chunk_id VARCHAR(50) REFERENCES chunk(chunk_id),
-    vector vector(3072),  -- text-embedding-3-large dimension
+    -- Stored for audit/debug only in no-pgvector environments.
+    -- When using Azure AI Search, vectors are indexed there.
+    vector DOUBLE PRECISION[],
     model VARCHAR(100) NOT NULL,
     dims INTEGER NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE INDEX idx_embedding_chunk ON embedding(chunk_id);
--- Vector index for similarity search
-CREATE INDEX idx_embedding_vector ON embedding USING ivfflat (vector vector_cosine_ops) WITH (lists = 100);
+-- Ensure upsert works by chunk_id
+CREATE UNIQUE INDEX uq_embedding_chunk_id ON embedding(chunk_id);
 
 -- =============================================================================
 -- Knowledge Graph Edges (with provenance per D.2(7))
@@ -196,7 +199,8 @@ CREATE TABLE chunk_ref (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     chunk_id VARCHAR(50) REFERENCES chunk(chunk_id),
     ref_type VARCHAR(50) NOT NULL,  -- quran | hadith | book
-    ref VARCHAR(255) NOT NULL,
+    -- Some sources include full ayah/hadith text; keep this unbounded to avoid truncation.
+    ref TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

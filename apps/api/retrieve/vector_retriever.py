@@ -1,13 +1,23 @@
 """
 Vector Retriever Module
 
-Retrieves evidence packets using vector similarity search with pgvector.
+Retrieves evidence packets using a configurable vector backend.
+
+Enterprise default:
+- Use Azure AI Search for vector search (no pgvector dependency on Windows).
 """
 
 from typing import Any, Optional
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+import os
+
+from apps.api.llm.embedding_client_azure import AzureEmbeddingClient, EmbeddingConfig
+
+
+def _vector_backend() -> str:
+    return os.getenv("VECTOR_BACKEND", "disabled").lower()  # azure_search | disabled
 
 
 async def search_similar_chunks(
@@ -32,58 +42,9 @@ async def search_similar_chunks(
     Returns:
         List of evidence packets with similarity scores.
     """
-    # Build the query with optional filters
-    query = """
-        SELECT 
-            c.chunk_id,
-            c.entity_type,
-            c.entity_id,
-            c.chunk_type,
-            c.text_ar,
-            c.source_doc_id,
-            c.source_anchor,
-            1 - (e.vector <=> (:query_vector)::vector) as similarity
-        FROM chunk c
-        JOIN embedding e ON e.chunk_id = c.chunk_id
-        WHERE 1 - (e.vector <=> (:query_vector)::vector) >= :threshold
-    """
-
-    params: dict[str, Any] = {
-        "query_vector": str(query_embedding),
-        "threshold": threshold,
-    }
-
-    if entity_types:
-        query += " AND c.entity_type = ANY(:entity_types)"
-        params["entity_types"] = entity_types
-
-    if chunk_types:
-        query += " AND c.chunk_type = ANY(:chunk_types)"
-        params["chunk_types"] = chunk_types
-
-    query += """
-        ORDER BY similarity DESC
-        LIMIT :top_k
-    """
-    params["top_k"] = top_k
-
-    result = await session.execute(text(query), params)
-    rows = result.fetchall()
-
-    return [
-        {
-            "chunk_id": row.chunk_id,
-            "entity_type": row.entity_type,
-            "entity_id": row.entity_id,
-            "chunk_type": row.chunk_type,
-            "text_ar": row.text_ar,
-            "source_doc_id": row.source_doc_id,
-            "source_anchor": row.source_anchor,
-            "refs": [],
-            "similarity": row.similarity,
-        }
-        for row in rows
-    ]
+    # In no-pgvector environments, SQL vector similarity is not available.
+    # We keep this function for compatibility, but it returns empty unless pgvector is installed.
+    return []
 
 
 async def get_embedding_for_chunk(
@@ -139,7 +100,7 @@ async def store_embedding(
     await session.execute(
         text("""
             INSERT INTO embedding (id, chunk_id, vector, model, dims)
-            VALUES (:id, :chunk_id, (:vector)::vector, :model, :dims)
+            VALUES (:id, :chunk_id, :vector, :model, :dims)
             ON CONFLICT (chunk_id) DO UPDATE SET
                 vector = EXCLUDED.vector,
                 model = EXCLUDED.model
@@ -147,7 +108,7 @@ async def store_embedding(
         {
             "id": embedding_id,
             "chunk_id": chunk_id,
-            "vector": str(vector),
+            "vector": vector,
             "model": model,
             "dims": dims,
         }
@@ -185,8 +146,6 @@ class VectorRetriever:
         Returns:
             Query embedding vector.
         """
-        from apps.api.llm.embedding_client_azure import AzureEmbeddingClient, EmbeddingConfig
-
         cfg = EmbeddingConfig.from_env()
         self._embedding_dims = cfg.dims
         client = AzureEmbeddingClient(cfg)
@@ -214,13 +173,22 @@ class VectorRetriever:
         Returns:
             List of evidence packets.
         """
-        query_embedding = await self.embed_query(query)
+        backend = _vector_backend()
+        if backend == "disabled":
+            return []
 
-        return await search_similar_chunks(
-            session,
-            query_embedding,
-            top_k=top_k,
-            entity_types=entity_types,
-            chunk_types=chunk_types,
-        )
+        if backend == "azure_search":
+            from apps.api.retrieve.vector_retriever_azure_search import azure_search_vector_search
+
+            cfg = EmbeddingConfig.from_env()
+            self._embedding_dims = cfg.dims
+            client = AzureEmbeddingClient(cfg)
+            qvec = (await client.embed_texts([query]))[0]
+            return await azure_search_vector_search(
+                query_vector=qvec,
+                top_k=top_k,
+            )
+
+        # Unknown backend
+        return []
 
