@@ -42,10 +42,10 @@ async def search_similar_chunks(
             c.text_ar,
             c.source_doc_id,
             c.source_anchor,
-            1 - (e.vector <=> :query_vector) as similarity
+            1 - (e.vector <=> (:query_vector)::vector) as similarity
         FROM chunk c
         JOIN embedding e ON e.chunk_id = c.chunk_id
-        WHERE 1 - (e.vector <=> :query_vector) >= :threshold
+        WHERE 1 - (e.vector <=> (:query_vector)::vector) >= :threshold
     """
 
     params: dict[str, Any] = {
@@ -139,7 +139,7 @@ async def store_embedding(
     await session.execute(
         text("""
             INSERT INTO embedding (id, chunk_id, vector, model, dims)
-            VALUES (:id, :chunk_id, :vector, :model, :dims)
+            VALUES (:id, :chunk_id, (:vector)::vector, :model, :dims)
             ON CONFLICT (chunk_id) DO UPDATE SET
                 vector = EXCLUDED.vector,
                 model = EXCLUDED.model

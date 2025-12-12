@@ -7,12 +7,13 @@ Creates citeable chunks from extracted content for:
 3. Citation validation
 """
 
-import uuid
+import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
 
 from apps.api.core.schemas import ChunkType, EntityType
+from apps.api.retrieve.normalize_ar import normalize_for_matching
 
 
 @dataclass
@@ -60,7 +61,7 @@ class Chunker:
         """
         self.max_tokens = max_tokens
         self.overlap_tokens = overlap_tokens
-        self._chunk_counter = 0
+        # Deterministic IDs (stable across re-ingestion) — no counter needed.
 
     def chunk_canonical_json(
         self,
@@ -236,8 +237,10 @@ class Chunker:
         refs: Optional[list[dict]] = None,
     ) -> Chunk:
         """Create a single chunk."""
-        self._chunk_counter += 1
-        chunk_id = f"CH_{self._chunk_counter:06d}"
+        # Stable chunk id derived from canonical identity + normalized text.
+        norm_text = normalize_for_matching(text_ar)
+        basis = f"{entity_type.value}|{entity_id}|{chunk_type.value}|{source_doc_id}|{source_anchor}|{norm_text}"
+        chunk_id = "CH_" + hashlib.sha1(basis.encode("utf-8")).hexdigest()[:12]
 
         return Chunk(
             chunk_id=chunk_id,

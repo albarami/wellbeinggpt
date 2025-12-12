@@ -27,8 +27,10 @@ def test_canonical_counts_from_repo_docx(tmp_path: Path):
     )
 
     assert summary.pillars == 5
-    assert summary.core_values > 0
-    assert summary.sub_values > 0
+    # Regression thresholds to avoid "passing" while silently missing large sections.
+    assert summary.core_values >= 20
+    assert summary.sub_values >= 50
+    assert summary.evidence_records >= 50
     assert canonical_out.exists()
     assert chunks_out.exists()
 

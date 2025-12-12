@@ -182,9 +182,12 @@ async def search_vector(request: VectorSearchRequest):
     Returns:
         SearchResponse: Matching evidence packets.
     """
-    # TODO: Implement in Phase 3
+    from apps.api.retrieve.vector_retriever import VectorRetriever
 
-    return SearchResponse(evidence_packets=[], total_found=0)
+    async with get_session() as session:
+        retriever = VectorRetriever()
+        packets = await retriever.search(session, request.query, top_k=request.top_k)
+        return SearchResponse(evidence_packets=packets, total_found=len(packets))
 
 
 @router.post("/search/graph", response_model=SearchResponse)
@@ -198,7 +201,37 @@ async def search_graph(request: GraphSearchRequest):
     Returns:
         SearchResponse: Evidence packets from graph neighborhood.
     """
-    # TODO: Implement in Phase 3
+    from apps.api.retrieve.graph_retriever import expand_graph
+    from apps.api.core.schemas import EntityType
+    from apps.api.retrieve.sql_retriever import get_chunks_with_refs
 
-    return SearchResponse(evidence_packets=[], total_found=0)
+    async with get_session() as session:
+        # Try to infer entity type by ID prefix (P/CV/SV)
+        entity_type = EntityType.SUB_VALUE
+        if request.entity_id.startswith("P"):
+            entity_type = EntityType.PILLAR
+        elif request.entity_id.startswith("CV"):
+            entity_type = EntityType.CORE_VALUE
+
+        neighbors = await expand_graph(
+            session,
+            entity_type=entity_type,
+            entity_id=request.entity_id,
+            depth=request.depth,
+            relationship_types=request.relationship_types,
+        )
+
+        packets = []
+        for n in neighbors:
+            n_type = n.get("neighbor_type")
+            n_id = n.get("neighbor_id")
+            if not n_type or not n_id:
+                continue
+            try:
+                et = EntityType(n_type)
+            except Exception:
+                continue
+            packets.extend(await get_chunks_with_refs(session, et, n_id, limit=10))
+
+        return SearchResponse(evidence_packets=packets, total_found=len(packets))
 
