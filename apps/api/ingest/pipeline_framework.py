@@ -43,6 +43,7 @@ def _expand_evidence_in_canonical(canonical: dict[str, Any]) -> dict[str, Any]:
                 continue
 
             parsed = parse_evidence_text(e.get("text_ar", "") or "")
+            extra_refs = list(e.get("refs") or [])
             # Create records per parsed ref
             for qr in parsed.quran_refs:
                 expanded.append({
@@ -59,6 +60,7 @@ def _expand_evidence_in_canonical(canonical: dict[str, Any]) -> dict[str, Any]:
                     "source_anchor": e.get("source_anchor", ""),
                     "raw_text": e.get("raw_text", ""),
                     "para_index": e.get("para_index", 0),
+                    "refs": extra_refs,
                 })
             for hr in parsed.hadith_refs:
                 expanded.append({
@@ -74,6 +76,7 @@ def _expand_evidence_in_canonical(canonical: dict[str, Any]) -> dict[str, Any]:
                     "source_anchor": e.get("source_anchor", ""),
                     "raw_text": e.get("raw_text", ""),
                     "para_index": e.get("para_index", 0),
+                    "refs": extra_refs,
                 })
 
             # Preserve unparsed segments as needs_review evidence records
@@ -90,6 +93,7 @@ def _expand_evidence_in_canonical(canonical: dict[str, Any]) -> dict[str, Any]:
                         "source_anchor": e.get("source_anchor", ""),
                         "raw_text": e.get("raw_text", ""),
                         "para_index": e.get("para_index", 0),
+                        "refs": extra_refs,
                     })
         return expanded
 

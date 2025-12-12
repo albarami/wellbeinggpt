@@ -217,6 +217,10 @@ class Chunker:
                 "type": evidence["evidence_type"],
                 "ref": evidence.get("ref_raw", ""),
             })
+        # Attach any extra bibliographic refs (footnotes) carried from the source block
+        for r in (evidence.get("refs") or []):
+            if isinstance(r, dict) and r.get("type") and r.get("ref"):
+                refs.append({"type": r["type"], "ref": r["ref"]})
 
         return self._create_chunk(
             entity_type=entity_type,

@@ -154,6 +154,7 @@ def _evidence_to_dict(evidence) -> dict[str, Any]:
             "source_anchor": evidence.source_anchor,
             "raw_text": evidence.raw_text,
             "para_index": evidence.para_index,
+            "refs": getattr(evidence, "refs", []) or [],
         }
     return {}
 

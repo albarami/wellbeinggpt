@@ -125,6 +125,8 @@ class ExtractedEvidence:
     source_anchor: str
     raw_text: str
     para_index: int
+    # Bibliographic refs encountered around this evidence block (e.g., hadith source footnotes).
+    refs: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -1223,6 +1225,7 @@ class RuleExtractor:
             source_anchor=first.get("a", ""),
             raw_text=raw_text,
             para_index=first.get("i", 0),
+            refs=list(self.current_block_refs),
         )
 
         if self.current_sub_value:
