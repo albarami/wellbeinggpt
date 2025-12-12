@@ -1,0 +1,33 @@
+# Core Framework
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+pydantic==2.6.1
+pydantic-settings==2.1.0
+
+# Database
+asyncpg==0.29.0
+sqlalchemy[asyncio]==2.0.25
+psycopg2-binary==2.9.9
+pgvector==0.2.4
+
+# Document Processing
+python-docx==1.1.0
+lxml==5.1.0
+
+# Azure OpenAI
+openai==1.12.0
+httpx==0.26.0
+
+# Arabic NLP / Text Processing
+regex==2023.12.25
+
+# Testing
+pytest==8.0.0
+pytest-asyncio==0.23.4
+pytest-cov==4.1.0
+httpx==0.26.0
+
+# Utilities
+python-dotenv==1.0.1
+python-multipart==0.0.9
+
