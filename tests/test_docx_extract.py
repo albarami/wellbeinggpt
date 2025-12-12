@@ -93,7 +93,8 @@ class TestDocxReaderIntegration:
         doc = reader.read("docs/source/framework_2025-10_v1.docx")
 
         # Stable count for this committed file (acts as a regression gate)
-        assert doc.total_paragraphs == 1026
+        # Includes table cell paragraphs (DocxReader preserves order across paragraphs + tables)
+        assert doc.total_paragraphs == 1213
         assert len(doc.doc_hash) == 64
         assert doc.doc_name == "framework_2025-10_v1.docx"
 

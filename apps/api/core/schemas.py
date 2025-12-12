@@ -21,6 +21,8 @@ class EntityType(str, Enum):
     PILLAR = "pillar"
     CORE_VALUE = "core_value"
     SUB_VALUE = "sub_value"
+    # Document-level / framework-level chunks (intro, glossary, methodology)
+    DOCUMENT = "document"
 
 
 class ChunkType(str, Enum):

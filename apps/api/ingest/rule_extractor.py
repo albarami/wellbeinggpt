@@ -74,22 +74,29 @@ SUB_VALUES_LIST_MARKERS = [
 
 # Definition markers
 DEFINITION_MARKERS = [
+    "المفهوم",
     "المفهوم:",
     "المفهوم :",
+    "التعريف",
     "التعريف:",
     "التعريف :",
+    "التعريف الإجرائي",
     "التعريف الإجرائي:",
     "التعريف الإجرائي :",
 ]
 
 # Evidence markers
 EVIDENCE_MARKERS = [
+    "التأصيل",
     "التأصيل:",
     "التأصيل :",
+    "الأدلة",
     "الأدلة:",
     "الأدلة :",
+    "الدليل",
     "الدليل:",
     "الدليل :",
+    "الشواهد",
     "الشواهد:",
     "الشواهد :",
 ]
@@ -237,6 +244,19 @@ class RuleExtractor:
         self.validation_errors: list[str] = []
         self.warnings: list[str] = []
 
+        # Authoritative skeleton extracted from the "ركائز الحياة الطيبة" table:
+        # canonical pillar name -> list of (expected) core values (usually 3).
+        self._skeleton_core_values_by_pillar: dict[str, list[str]] = {}
+        # Paragraph indices that belong to the skeleton table region; skip in main state machine.
+        self._skip_para_indices: set[int] = set()
+        # If skeleton detected, we pre-create the 5 pillars here (stable ids) and reuse them.
+        self._pillars_by_canonical: dict[str, ExtractedPillar] = {}
+
+        # Pillar-section sub-values table mode (3-column tables under each pillar)
+        self._subvalues_table_mode: bool = False
+        self._subvalues_table_core_order: list[ExtractedCoreValue] = []
+        self._subvalues_table_col: int = 0
+
     def extract(self, doc: ParsedDocument) -> ExtractionResult:
         """
         Extract structured content from a parsed document.
@@ -252,8 +272,15 @@ class RuleExtractor:
         source_doc_id = f"DOC_{doc.doc_hash[:16]}"
         source_doc = f"docs/source/{doc.doc_name}"
 
+        # Pre-scan for the framework skeleton table ("ركائز الحياة الطيبة") and mark
+        # its paragraphs as skippable so we don't create duplicate pillars/core-values
+        # from table headers.
+        self._extract_framework_skeleton(doc)
+
         # Process each paragraph through the state machine
         for para in doc.paragraphs:
+            if para.para_index in self._skip_para_indices:
+                continue
             self._process_paragraph(para, doc.doc_hash, source_doc)
 
         # Finalize any open sections
@@ -289,7 +316,10 @@ class RuleExtractor:
         """Process a single paragraph through the state machine."""
         text = para.text.strip()
 
+        # In pillar sub-values table mode, empty cells must be counted to keep column alignment.
         if not text:
+            if self.state == ExtractorState.IN_SUB_VALUES_LIST and self._subvalues_table_mode:
+                self._subvalues_table_col = (self._subvalues_table_col + 1) % max(1, len(self._subvalues_table_core_order) or 3)
             return
 
         normalized = normalize_for_matching(text)
@@ -312,11 +342,32 @@ class RuleExtractor:
             return
 
         # After pillar/list transitions, detect core/sub headings (context-sensitive)
+        # If a skeleton table exists, core value headings may appear as plain names (without ordinals),
+        # especially inside tables. In that case, accept only if the name matches the allowed
+        # 3 core values for the current pillar.
+        if self.current_pillar and self._skeleton_core_values_by_pillar:
+            candidate = text.strip().rstrip(":：").strip()
+            # Guardrails: avoid matching long prose that contains core-value keywords.
+            if (
+                candidate
+                and len(candidate) <= 40
+                and len(candidate.split()) <= 4
+                and not any(ch in candidate for ch in ["،", "“", "”", "\"", ".", "…", "؛"])
+                and self._core_value_allowed_for_current_pillar(candidate)
+            ):
+                self._finalize_definition_and_evidence()
+                self._subvalues_table_mode = False
+                self._start_core_value_from_heading(para, doc_hash, source_doc, candidate)
+                return
+
         # Detect core value headings that don't use "القيم الكلية" lists (common in this DOCX)
         if self._is_core_value_heading(text) and self.current_pillar:
-            self._finalize_definition_and_evidence()
-            self._start_core_value_from_heading(para, doc_hash, source_doc, text)
-            return
+            cleaned = self._clean_core_value_heading_name(text)
+            if self._core_value_allowed_for_current_pillar(cleaned):
+                self._finalize_definition_and_evidence()
+                self._subvalues_table_mode = False
+                self._start_core_value_from_heading(para, doc_hash, source_doc, text)
+                return
 
         # Detect sub-value headings inside a core value (e.g., "التوحيد:" / "العزة")
         if self._is_sub_value_heading(text) and self.current_core_value:
@@ -363,9 +414,79 @@ class RuleExtractor:
             return False
         return True
 
+    def _clean_core_value_heading_name(self, text: str) -> str:
+        name = text.strip()
+        name = re.sub(
+            r"^(أولا|أولًا|أولاً|ثانيا|ثانيًا|ثالثا|ثالثًا|رابعا|خامسا|سادسا|سابعا|ثامنا|تاسعا|عاشرا|[0-9\u0660-\u0669]+)[.\s:：\-]+",
+            "",
+            name,
+        ).strip()
+        name = re.sub(r"^\s*قيمة\s+", "", name).strip()
+        if "  " in name:
+            name = name.split("  ")[0].strip()
+        return name
+
+    def _canonicalize_core_value_name_for_pillar(self, pillar_name: str, candidate: str) -> str:
+        """
+        If skeleton exists, map variant headings to the canonical core value name.
+        Example: "العزيمة والصمود" -> "العزيمة" (as listed in skeleton table).
+        """
+        if not self._skeleton_core_values_by_pillar:
+            return candidate
+        p = self._canonicalize_pillar_name(pillar_name)
+        allowed = self._skeleton_core_values_by_pillar.get(p) or []
+        cand_n = normalize_for_matching(candidate)
+        for a in allowed:
+            a_n = normalize_for_matching(a)
+            if a_n == cand_n:
+                return a
+        # allow substring mapping only for short headings
+        if (len(candidate) <= 60) and (len(candidate.split()) <= 6):
+            for a in allowed:
+                a_n = normalize_for_matching(a)
+                if a_n and a_n in cand_n:
+                    return a
+        return candidate
+
+    def _canonicalize_pillar_name(self, text: str) -> str:
+        t = normalize_for_matching(text)
+        if normalize_for_matching("الروحية") in t:
+            return "الحياة الروحية"
+        if normalize_for_matching("العاطفية") in t:
+            return "الحياة العاطفية"
+        if normalize_for_matching("الفكرية") in t:
+            return "الحياة الفكرية"
+        if normalize_for_matching("البدنية") in t:
+            return "الحياة البدنية"
+        if normalize_for_matching("الاجتماعية") in t:
+            return "الحياة الاجتماعية"
+        return text.strip()
+
+    def _core_value_allowed_for_current_pillar(self, core_value_name: str) -> bool:
+        # If we have a skeleton table, only allow core values listed for the current pillar.
+        if not self.current_pillar:
+            return False
+        if not self._skeleton_core_values_by_pillar:
+            return True
+        pillar_key = self._canonicalize_pillar_name(self.current_pillar.name_ar)
+        allowed = self._skeleton_core_values_by_pillar.get(pillar_key) or []
+        n = normalize_for_matching(core_value_name)
+        if not n:
+            return False
+
+        # Safety: only permit fuzzy/substring matching for short, heading-like strings.
+        looks_like_heading = (len(core_value_name) <= 40) and (len(core_value_name.split()) <= 4)
+
+        for a in allowed:
+            a_n = normalize_for_matching(a)
+            if a_n == n:
+                return True
+            if looks_like_heading and a_n and (a_n in n):
+                # e.g., "العزيمة" within "العزيمة والصمود"
+                return True
+        return False
+
     def _start_core_value_from_heading(self, para: ParsedParagraph, doc_hash: str, source_doc: str, text: str) -> None:
-        self.core_value_counter += 1
-        cv_id = f"CV{self.core_value_counter:03d}"
         name = text.strip()
         # Strip ordinal and the word "قيمة" if present
         name = re.sub(r"^(أولا|أولًا|أولاً|ثانيا|ثانيًا|ثالثا|ثالثًا|رابعا|خامسا|سادسا|سابعا|ثامنا|تاسعا|عاشرا|[0-9\u0660-\u0669]+)[.\s:：\-]+", "", name).strip()
@@ -373,6 +494,22 @@ class RuleExtractor:
         # Remove English tail if present after multiple spaces
         if "  " in name:
             name = name.split("  ")[0].strip()
+
+        if self.current_pillar and self._skeleton_core_values_by_pillar:
+            name = self._canonicalize_core_value_name_for_pillar(self.current_pillar.name_ar, name if name else text.strip())
+
+        # De-dupe within the current pillar by name (prevents double-counting from repeated headings)
+        if self.current_pillar:
+            target_norm = normalize_for_matching(name if name else text.strip())
+            for existing in self.current_pillar.core_values:
+                if normalize_for_matching(existing.name_ar) == target_norm:
+                    self.current_core_value = existing
+                    self.current_sub_value = None
+                    self.state = ExtractorState.IN_CORE_VALUE
+                    return
+
+        self.core_value_counter += 1
+        cv_id = f"CV{self.core_value_counter:03d}"
         cv = ExtractedCoreValue(
             id=cv_id,
             name_ar=name if name else text.strip(),
@@ -422,31 +559,19 @@ class RuleExtractor:
             return False
         if t.startswith("قال") or t.startswith("وقال") or t.startswith("يقول") or t.startswith("وفي الحديث"):
             return False
+        # Exclude evidence-intro prose that often appears inline
+        if "يقول الله تعالى" in t or "قال الله تعالى" in t or t.startswith("وفي"):
+            return False
         # Headings often end with ":" or are short standalone lines
         if t.endswith(":") or t.endswith("："):
-            return True
-        # List-paragraph style short headings (often without colon)
-        if len(t.split()) <= 4 and not self._looks_like_list_item(t):
             return True
         return False
 
     def _start_sub_value_from_heading(self, para: ParsedParagraph, doc_hash: str, source_doc: str, text: str) -> None:
-        self.sub_value_counter += 1
-        sv_id = f"SV{self.sub_value_counter:03d}"
+        if not self.current_core_value:
+            return
         name = text.strip().rstrip(":：").strip()
-        sv = ExtractedSubValue(
-            id=sv_id,
-            name_ar=name if name else text.strip(),
-            source_doc=source_doc,
-            source_hash=doc_hash,
-            source_anchor=para.source_anchor,
-            raw_text=text,
-            para_index=para.para_index,
-        )
-        if self.current_core_value:
-            self.current_core_value.sub_values.append(sv)
-            self.current_sub_value = sv
-            self.state = ExtractorState.IN_SUB_VALUE
+        self._add_sub_value_name(para, doc_hash, source_doc, name, raw_text=text)
 
     def _is_pillars_list_marker(self, normalized_text: str) -> bool:
         """Check if text marks the start of pillars list."""
@@ -483,35 +608,60 @@ class RuleExtractor:
 
     def _is_definition_marker(self, text: str) -> bool:
         """Check if text starts a definition block."""
+        n = normalize_for_matching(text[:80])
         for marker in DEFINITION_MARKERS:
-            if text.startswith(marker) or marker in text[:50]:
+            if normalize_for_matching(marker) in n:
                 return True
         return False
 
     def _is_evidence_marker(self, text: str) -> bool:
         """Check if text starts an evidence block."""
+        n = normalize_for_matching(text[:80])
         for marker in EVIDENCE_MARKERS:
-            if text.startswith(marker) or marker in text[:50]:
+            if normalize_for_matching(marker) in n:
                 return True
         return False
 
     def _handle_pillars_list(self) -> None:
         """Handle transition to pillars list state."""
-        self._finalize_current_sections(None, None)
+        self._finalize_definition_and_evidence()
         self.state = ExtractorState.IN_PILLARS_LIST
 
     def _handle_pillar_start(
         self, para: ParsedParagraph, doc_hash: str, source_doc: str, text: str
     ) -> None:
         """Handle start of a new pillar."""
-        self._finalize_current_sections(doc_hash, source_doc)
+        # Finalize open definition/evidence when changing pillar context.
+        self._finalize_definition_and_evidence()
 
+        name = self._canonicalize_pillar_name(self._extract_pillar_name(text))
+
+        # If skeleton exists, only allow the 5 canonical pillars from the table,
+        # and reuse the pre-created pillar objects (stable IDs).
+        if self._pillars_by_canonical:
+            if name not in self._pillars_by_canonical:
+                return
+            self.current_pillar = self._pillars_by_canonical[name]
+            # Prefer section heading anchor over table header anchor if available.
+            if self.current_pillar.source_anchor.startswith("para_") and self.current_pillar.raw_text:
+                # If current raw_text looks like table header ("... الطيبة") and new heading is richer, update.
+                if ("الطيبة" in (self.current_pillar.raw_text or "")) and ("الركيزة" in text or "أولا" in text or "ثانيا" in text):
+                    self.current_pillar.source_anchor = para.source_anchor
+                    self.current_pillar.raw_text = text
+                    self.current_pillar.para_index = para.para_index
+            else:
+                self.current_pillar.source_anchor = para.source_anchor
+                self.current_pillar.raw_text = text
+                self.current_pillar.para_index = para.para_index
+
+            self.current_core_value = None
+            self.current_sub_value = None
+            self.state = ExtractorState.IN_PILLAR
+            return
+
+        # Legacy behavior (no skeleton): create new pillar
         self.pillar_counter += 1
         pillar_id = f"P{self.pillar_counter:03d}"
-
-        # Extract pillar name
-        name = self._extract_pillar_name(text)
-
         self.current_pillar = ExtractedPillar(
             id=pillar_id,
             name_ar=name,
@@ -535,6 +685,92 @@ class RuleExtractor:
         name = name.strip(" :.،")
         return name if name else text
 
+    def _extract_framework_skeleton(self, doc: ParsedDocument) -> None:
+        """
+        Extract the authoritative framework skeleton from the "ركائز الحياة الطيبة" table:
+        5 pillars x 3 core values.
+
+        DocxReader flattens table cell paragraphs in row-major order, so we locate the marker then
+        parse the next header row (5 cells) + 3 rows (15 cells).
+        """
+        marker_norm = normalize_for_matching("ركائز الحياة الطيبة")
+        # Find marker paragraph index
+        marker_pi: Optional[int] = None
+        for p in doc.paragraphs:
+            if marker_norm in normalize_for_matching(p.text or ""):
+                marker_pi = p.para_index
+                break
+        if marker_pi is None:
+            return
+
+        # Build a window of subsequent non-empty paras (table cell texts) after marker
+        window = [p for p in doc.paragraphs if p.para_index >= marker_pi and (p.text or "").strip()]
+        if len(window) < 30:
+            return
+
+        def is_header_cell(txt: str) -> bool:
+            n = normalize_for_matching(txt)
+            if normalize_for_matching("الحياة") not in n:
+                return False
+            if normalize_for_matching("الطيبة") not in n:
+                return False
+            return any(
+                normalize_for_matching(x) in n
+                for x in ["الروحية", "العاطفية", "الفكرية", "البدنية", "الاجتماعية"]
+            )
+
+        header_pos: Optional[int] = None
+        for i in range(min(len(window), 120)):
+            if is_header_cell(window[i].text):
+                if i + 4 < len(window) and all(is_header_cell(window[i + j].text) for j in range(5)):
+                    header_pos = i
+                    break
+        if header_pos is None:
+            return
+
+        headers = [self._canonicalize_pillar_name(window[header_pos + j].text) for j in range(5)]
+        core_start = header_pos + 5
+        if core_start + 15 > len(window):
+            return
+
+        mapping: dict[str, list[str]] = {h: [] for h in headers}
+        for row_idx in range(3):
+            for col_idx in range(5):
+                cell_txt = (window[core_start + row_idx * 5 + col_idx].text or "").strip()
+                if cell_txt:
+                    mapping[headers[col_idx]].append(cell_txt)
+
+        if not all(len(v) >= 3 for v in mapping.values()):
+            self.warnings.append("Skeleton table detected but incomplete; core value gating disabled.")
+            return
+
+        self._skeleton_core_values_by_pillar = {k: v[:3] for k, v in mapping.items()}
+
+        # Mark the marker paragraph + the header row + the 3 rows of core values as skippable.
+        # (Skip by global para_index.)
+        to_skip = [window[0]] + window[header_pos : header_pos + 5 + 15]
+        self._skip_para_indices = {p.para_index for p in to_skip}
+
+        # Pre-create the 5 canonical pillars with stable IDs (P001..P005) in the table order.
+        # Use the table header cell anchor as initial provenance; we may later replace it with the
+        # main section heading anchor when encountered.
+        self._pillars_by_canonical = {}
+        self.pillars = []
+        self.pillar_counter = 0
+        for i, h in enumerate(headers):
+            pid = f"P{i+1:03d}"
+            pillar_obj = ExtractedPillar(
+                id=pid,
+                name_ar=h,
+                source_doc=f"docs/source/{doc.doc_name}",
+                source_hash=doc.doc_hash,
+                source_anchor=window[header_pos + i].source_anchor,
+                raw_text=window[header_pos + i].text,
+                para_index=window[header_pos + i].para_index,
+            )
+            self._pillars_by_canonical[h] = pillar_obj
+            self.pillars.append(pillar_obj)
+
     def _handle_core_values_list(self) -> None:
         """Handle transition to core values list state."""
         self._finalize_definition_and_evidence()
@@ -544,6 +780,27 @@ class RuleExtractor:
         """Handle transition to sub-values list state."""
         self._finalize_definition_and_evidence()
         self.state = ExtractorState.IN_SUB_VALUES_LIST
+
+        # If we are inside a pillar section with 3 core values, this is typically a 3-column table
+        # where each subsequent row has one sub-value per core value.
+        self._subvalues_table_mode = False
+        self._subvalues_table_core_order = []
+        self._subvalues_table_col = 0
+        if self._skeleton_core_values_by_pillar and self.current_pillar and len(self.current_pillar.core_values) >= 3:
+            allowed = self._skeleton_core_values_by_pillar.get(self.current_pillar.name_ar) or []
+            if len(allowed) >= 3:
+                # Order core values per the table order from the skeleton
+                ordered: list[ExtractedCoreValue] = []
+                for a in allowed[:3]:
+                    a_n = normalize_for_matching(a)
+                    for cv in self.current_pillar.core_values:
+                        if normalize_for_matching(cv.name_ar) == a_n:
+                            ordered.append(cv)
+                            break
+                if len(ordered) == 3:
+                    self._subvalues_table_mode = True
+                    self._subvalues_table_core_order = ordered
+                    self._subvalues_table_col = 0
 
     def _handle_definition_start(
         self, para: ParsedParagraph, doc_hash: str, source_doc: str, text: str
@@ -619,7 +876,39 @@ class RuleExtractor:
             self._try_add_core_value(para, doc_hash, source_doc, text)
 
         elif self.state == ExtractorState.IN_SUB_VALUES_LIST:
-            # Each line might be a sub-value name
+            if self._subvalues_table_mode and self._subvalues_table_core_order:
+                # Table cells arrive row-major; after each "القيم الجزئية" marker row-start,
+                # we assign the next 3 cells (including empty placeholders handled earlier)
+                # to the 3 core values in order.
+                if self._is_sub_values_list_marker(normalize_for_matching(text)):
+                    self._subvalues_table_col = 0
+                    return
+
+                # Filter out non-name lines
+                t = text.strip()
+                if (
+                    t
+                    and len(t) <= 80
+                    and not self._is_definition_marker(t)
+                    and not self._is_evidence_marker(t)
+                    and not (t.startswith("﴿") or t.startswith("{") or t.startswith("(") or t.startswith("«"))
+                ):
+                    cv = self._subvalues_table_core_order[self._subvalues_table_col]
+                    # Temporarily set current_core_value so existing helper attaches correctly
+                    prev_cv = self.current_core_value
+                    prev_sv = self.current_sub_value
+                    prev_state = self.state
+                    self.current_core_value = cv
+                    self._add_sub_value_name(para, doc_hash, source_doc, t, raw_text=t)
+                    self.current_core_value = prev_cv
+                    # Table listing only: do not enter IN_SUB_VALUE state (no definitions/evidence here)
+                    self.current_sub_value = prev_sv
+                    self.state = prev_state
+
+                self._subvalues_table_col = (self._subvalues_table_col + 1) % len(self._subvalues_table_core_order)
+                return
+
+            # Fallback: Each line might be a sub-value name
             self._try_add_sub_value(para, doc_hash, source_doc, text)
 
         elif self.state == ExtractorState.IN_PILLAR:
@@ -632,6 +921,18 @@ class RuleExtractor:
         elif self.state in (ExtractorState.IN_CORE_VALUE, ExtractorState.IN_SUB_VALUE):
             # Fallback: if definition marker isn't used, treat first substantive paragraph as definition
             self._maybe_assign_fallback_definition(para, doc_hash, source_doc, text)
+            # Also, some core values list sub-values as bullet/numbered items without a "القيم الجزئية" marker.
+            # In that case, treat short list items as sub-value names.
+            if (
+                self.state == ExtractorState.IN_CORE_VALUE
+                and self.current_core_value
+                and not self.current_definition_paras
+                and not self.current_evidence_paras
+                and self._looks_like_list_item(text)
+                and len(text.strip()) <= 80
+            ):
+                self._try_add_sub_value(para, doc_hash, source_doc, text)
+                return
 
     def _try_add_core_value(
         self, para: ParsedParagraph, doc_hash: str, source_doc: str, text: str
@@ -646,6 +947,23 @@ class RuleExtractor:
 
         if not name or len(name) < 2:
             return
+
+        if self.current_pillar and self._skeleton_core_values_by_pillar:
+            name = self._canonicalize_core_value_name_for_pillar(self.current_pillar.name_ar, name)
+
+        # If skeleton exists, enforce allowed core values per pillar
+        if not self._core_value_allowed_for_current_pillar(name):
+            return
+
+        # De-dupe within pillar by name
+        if self.current_pillar:
+            n = normalize_for_matching(name)
+            for existing in self.current_pillar.core_values:
+                if normalize_for_matching(existing.name_ar) == n:
+                    self.current_core_value = existing
+                    self.current_sub_value = None
+                    self.state = ExtractorState.IN_CORE_VALUE
+                    return
 
         self.core_value_counter += 1
         cv_id = f"CV{self.core_value_counter:03d}"
@@ -678,23 +996,66 @@ class RuleExtractor:
         if not name or len(name) < 2:
             return
 
+        self._add_sub_value_name(para, doc_hash, source_doc, name, raw_text=text)
+
+    def _add_sub_value_name(
+        self,
+        para: ParsedParagraph,
+        doc_hash: str,
+        source_doc: str,
+        name: str,
+        raw_text: Optional[str] = None,
+    ) -> None:
+        """
+        Add a sub-value to the current core value from a plain name (no bullet/number required).
+        Used for table cells under 'القيم الجزئية'.
+        """
+        if not self.current_core_value:
+            return
+
+        clean_name = (name or "").strip().rstrip(":：").strip()
+        if not clean_name or len(clean_name) < 2:
+            return
+
+        # Reject obvious non-entity prose / section lines
+        if "\n" in clean_name:
+            return
+        # Drop citation footnotes / bibliographic lines
+        if re.match(r"^\d+\s*[-–—]?\s*", clean_name):
+            return
+        if normalize_for_matching(clean_name).startswith(normalize_for_matching("تفسير")):
+            return
+        if self._is_definition_marker(clean_name) or self._is_evidence_marker(clean_name):
+            return
+        if clean_name.startswith("قال تعالى") or clean_name.startswith("يقول الله تعالى") or clean_name.startswith("وفي الحديث"):
+            return
+        if clean_name.startswith("وتندرج") or clean_name.startswith("تندرج") or "قيم أحفاد" in clean_name:
+            return
+        if clean_name.startswith("ومنها") or clean_name.startswith("ومن"):
+            return
+
+        # De-dupe within core value
+        n = normalize_for_matching(clean_name)
+        for existing in self.current_core_value.sub_values:
+            if normalize_for_matching(existing.name_ar) == n:
+                # Do not create duplicates; keep existing.
+                return
+
         self.sub_value_counter += 1
         sv_id = f"SV{self.sub_value_counter:03d}"
-
         sv = ExtractedSubValue(
             id=sv_id,
-            name_ar=name,
+            name_ar=clean_name,
             source_doc=source_doc,
             source_hash=doc_hash,
             source_anchor=para.source_anchor,
-            raw_text=text,
+            raw_text=raw_text or clean_name,
             para_index=para.para_index,
         )
+        self.current_core_value.sub_values.append(sv)
+        self.current_sub_value = sv
+        self.state = ExtractorState.IN_SUB_VALUE
 
-        if self.current_core_value:
-            self.current_core_value.sub_values.append(sv)
-            self.current_sub_value = sv
-            self.state = ExtractorState.IN_SUB_VALUE
 
     def _clean_value_name(self, text: str) -> str:
         """Clean up a value name extracted from text."""
@@ -787,12 +1148,14 @@ class RuleExtractor:
         """Finalize any open sections."""
         self._finalize_definition_and_evidence()
 
-        # Add current pillar to list if exists
-        if self.current_pillar:
+        # Add current pillar to list if exists (legacy mode).
+        # In skeleton mode, pillars are pre-created and should not be appended again.
+        if self.current_pillar and self.current_pillar not in self.pillars:
             self.pillars.append(self.current_pillar)
-            self.current_pillar = None
-            self.current_core_value = None
-            self.current_sub_value = None
+
+        self.current_pillar = None
+        self.current_core_value = None
+        self.current_sub_value = None
 
     def _finalize_definition_and_evidence(self) -> None:
         """Finalize pending definition and evidence."""

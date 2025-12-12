@@ -15,6 +15,10 @@ from pathlib import Path
 from typing import Optional
 
 from docx import Document
+from docx.table import Table
+from docx.text.paragraph import Paragraph
+from docx.oxml.table import CT_Tbl
+from docx.oxml.text.paragraph import CT_P
 
 
 @dataclass
@@ -157,7 +161,8 @@ class DocxReader:
 
     def _parse_paragraphs(self, doc: Document, doc_name: str, doc_hash: str) -> list[ParsedParagraph]:
         """
-        Parse all paragraphs from a python-docx Document.
+        Parse all paragraphs from a python-docx Document, including table cell paragraphs,
+        preserving document order.
 
         Args:
             doc: The python-docx Document object.
@@ -165,31 +170,61 @@ class DocxReader:
         Returns:
             List of ParsedParagraph objects.
         """
-        paragraphs = []
+        def iter_block_items(parent) -> list[Paragraph | Table]:
+            """
+            Yield paragraphs and tables in document order.
+            """
+            out: list[Paragraph | Table] = []
+            body = parent.element.body
+            for child in body.iterchildren():
+                if isinstance(child, CT_P):
+                    out.append(Paragraph(child, parent))
+                elif isinstance(child, CT_Tbl):
+                    out.append(Table(child, parent))
+            return out
 
-        for idx, para in enumerate(doc.paragraphs):
-            # Get text content
-            text = para.text.strip()
+        out_paras: list[ParsedParagraph] = []
+        global_idx = 0
 
-            # Get style
-            style = None
-            if para.style:
-                style = para.style.name
+        for block in iter_block_items(doc):
+            if isinstance(block, Paragraph):
+                text = (block.text or "").strip()
+                style = block.style.name if getattr(block, "style", None) else None
+                runs = [r.text for r in block.runs if r.text] if getattr(block, "runs", None) else []
+                out_paras.append(
+                    ParsedParagraph(
+                        para_index=global_idx,
+                        text=text,
+                        style=style,
+                        doc_name=doc_name,
+                        doc_hash=doc_hash,
+                        source_anchor=f"para_{global_idx}",
+                        runs=runs,
+                    )
+                )
+                global_idx += 1
+                continue
 
-            # Get run texts (for detecting formatting)
-            runs = [run.text for run in para.runs if run.text]
+            # Table: include cell paragraphs row-major.
+            if isinstance(block, Table):
+                for row in block.rows:
+                    for cell in row.cells:
+                        for p in cell.paragraphs:
+                            text = (p.text or "").strip()
+                            style = p.style.name if getattr(p, "style", None) else None
+                            runs = [r.text for r in p.runs if r.text] if getattr(p, "runs", None) else []
+                            out_paras.append(
+                                ParsedParagraph(
+                                    para_index=global_idx,
+                                    text=text,
+                                    style=style,
+                                    doc_name=doc_name,
+                                    doc_hash=doc_hash,
+                                    source_anchor=f"para_{global_idx}",
+                                    runs=runs,
+                                )
+                            )
+                            global_idx += 1
 
-            parsed = ParsedParagraph(
-                para_index=idx,
-                text=text,
-                style=style,
-                doc_name=doc_name,
-                doc_hash=doc_hash,
-                source_anchor=f"para_{idx}",
-                runs=runs,
-            )
-
-            paragraphs.append(parsed)
-
-        return paragraphs
+        return out_paras
 

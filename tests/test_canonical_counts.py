@@ -27,9 +27,10 @@ def test_canonical_counts_from_repo_docx(tmp_path: Path):
     )
 
     assert summary.pillars == 5
-    # Regression thresholds to avoid "passing" while silently missing large sections.
-    assert summary.core_values >= 20
-    assert summary.sub_values >= 50
+    # For this framework, the "ركائز الحياة الطيبة" table defines 3 core values per pillar.
+    assert summary.core_values == 15
+    # Sub-values are determined by pillar tables/lists; keep a guardrail threshold until we lock exact count.
+    assert summary.sub_values >= 60
     assert summary.evidence_records >= 50
     assert canonical_out.exists()
     assert chunks_out.exists()
