@@ -5,6 +5,7 @@ Provides async database connections using SQLAlchemy.
 """
 
 import os
+import sys
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -14,6 +15,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 
 # Get database URL from environment
@@ -34,10 +36,15 @@ if os.name == "nt" and os.getenv("DB_HOST_PREFER_IPV4", "true").lower() == "true
 
 
 # Create async engine
+# Reason: On Windows with pytest-asyncio (per-test event loops), pooled asyncpg
+# connections can become bound to a closed loop and cause "Event loop is closed"
+# errors on subsequent tests. Disable pooling under pytest for determinism.
+use_null_pool = "pytest" in sys.modules
 engine = create_async_engine(
     DATABASE_URL,
     echo=os.getenv("DEBUG", "").lower() == "true",
     pool_pre_ping=True,
+    poolclass=NullPool if use_null_pool else None,
 )
 
 # Session factory

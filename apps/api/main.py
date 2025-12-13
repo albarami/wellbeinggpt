@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from apps.api.routes import ingest, ask
+from apps.api.routes import ingest, ask, graph
 from apps.api.llm.gpt5_client_azure import ProviderConfig
 
 # Load local .env (does not override real env vars by default)
@@ -32,6 +32,7 @@ app.add_middleware(
 # Include routers
 app.include_router(ingest.router, prefix="/ingest", tags=["ingestion"])
 app.include_router(ask.router, tags=["query"])
+app.include_router(graph.router, tags=["graph"])
 
 
 @app.get("/health")
