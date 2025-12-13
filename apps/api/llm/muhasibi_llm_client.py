@@ -181,12 +181,22 @@ class MuhasibiLLMClient:
         question: str,
         evidence_packets: list[dict[str, Any]],
         detected_entities: list[dict[str, Any]],
+        mode: str = "answer",
     ) -> Optional[InterpretResult]:
-        system_prompt = _read_prompt("interpreter.md")
+        prompt_name = "interpreter.md"
+        if mode == "debate":
+            prompt_name = "interpreter_debate_ar.md"
+        elif mode == "socratic":
+            prompt_name = "interpreter_socratic_ar.md"
+        elif mode == "judge":
+            prompt_name = "interpreter_judge_ar.md"
+
+        system_prompt = _read_prompt(prompt_name)
         user_payload = {
             "question": question,
             "evidence_packets": evidence_packets,
             "detected_entities": detected_entities,
+            "mode": mode,
         }
         req = LLMRequest(
             system_prompt=system_prompt,

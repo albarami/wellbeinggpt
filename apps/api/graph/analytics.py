@@ -130,23 +130,34 @@ async def concept_network(
         if not frontier:
             break
 
-        # Expand from current frontier (both directions)
+        # Expand from current frontier (both directions).
+        # Reason: asyncpg does not support binding anonymous composite arrays for ANY((a,b)).
+        # We build a bounded OR clause instead (frontier is small by design).
+        params: dict[str, Any] = {}
+        from_terms: list[str] = []
+        to_terms: list[str] = []
+        for idx, (t, i) in enumerate(frontier[:50]):  # hard bound
+            params[f"ft{idx}"] = t
+            params[f"fi{idx}"] = i
+            params[f"tt{idx}"] = t
+            params[f"ti{idx}"] = i
+            from_terms.append(f"(e.from_type = :ft{idx} AND e.from_id = :fi{idx})")
+            to_terms.append(f"(e.to_type = :tt{idx} AND e.to_id = :ti{idx})")
+
+        where_frontier = " OR ".join(from_terms + to_terms) if (from_terms or to_terms) else "FALSE"
+
         rows = (
             await session.execute(
                 text(
-                    """
+                    f"""
                     SELECT
                         e.from_type, e.from_id, e.rel_type, e.to_type, e.to_id
                     FROM edge e
                     WHERE e.status = 'approved'
-                      AND (
-                        (e.from_type, e.from_id) = ANY(:pairs)
-                        OR
-                        (e.to_type, e.to_id) = ANY(:pairs)
-                      )
+                      AND ({where_frontier})
                     """
                 ),
-                {"pairs": frontier},
+                params,
             )
         ).fetchall()
 

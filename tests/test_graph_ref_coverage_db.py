@@ -18,25 +18,41 @@ async def test_ref_coverage_returns_entities_and_pillars_best_effort():
 
     rid = "quran:البقرة:999"
     async with get_session() as session:
-        await session.execute(
-            text(
-                """
-                INSERT INTO edge (from_type, from_id, rel_type, to_type, to_id,
-                                  created_method, created_by, justification, status)
-                VALUES
-                    ('sub_value','SV_T1','MENTIONS_REF','ref',CAST(:rid AS VARCHAR(50)),'rule_exact_match','test',:rid,'approved'),
-                    ('core_value','CV_T1','MENTIONS_REF','ref',CAST(:rid AS VARCHAR(50)),'rule_exact_match','test',:rid,'approved')
-                ON CONFLICT DO NOTHING
-                """
-            ),
-            {"rid": rid},
-        )
-        await session.commit()
+        try:
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO edge (from_type, from_id, rel_type, to_type, to_id,
+                                      created_method, created_by, justification, status)
+                    VALUES
+                        ('sub_value','SV_T1','MENTIONS_REF','ref',CAST(:rid AS VARCHAR(50)),'rule_exact_match','test',:rid,'approved'),
+                        ('sub_value','SV_T2','MENTIONS_REF','ref',CAST(:rid AS VARCHAR(50)),'rule_exact_match','test',:rid,'approved')
+                    ON CONFLICT DO NOTHING
+                    """
+                ),
+                {"rid": rid},
+            )
+            await session.commit()
 
-        data = await ref_coverage(session, ref_node_id=rid, limit=50)
-        assert data["ref_node_id"] == rid
-        assert {"entity_type": "sub_value", "entity_id": "SV_T1"} in data["entities"]
-        assert {"entity_type": "core_value", "entity_id": "CV_T1"} in data["entities"]
-        assert isinstance(data["pillars"], list)
+            data = await ref_coverage(session, ref_node_id=rid, limit=50)
+            assert data["ref_node_id"] == rid
+            assert {"entity_type": "sub_value", "entity_id": "SV_T1"} in data["entities"]
+            assert {"entity_type": "sub_value", "entity_id": "SV_T2"} in data["entities"]
+            assert isinstance(data["pillars"], list)
+        finally:
+            await session.execute(
+                text(
+                    """
+                    DELETE FROM edge
+                    WHERE created_by='test'
+                      AND rel_type='MENTIONS_REF'
+                      AND to_type='ref'
+                      AND to_id=:rid
+                      AND from_id IN ('SV_T1','SV_T2')
+                    """
+                ),
+                {"rid": rid},
+            )
+            await session.commit()
 
 

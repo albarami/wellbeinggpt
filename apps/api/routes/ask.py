@@ -25,6 +25,14 @@ class AskRequest(BaseModel):
 
     question: str = Field(..., description="The question in Arabic or English")
     language: str = Field(default="ar", description="Preferred response language")
+    mode: str = Field(
+        default="answer",
+        description="answer|debate|socratic|judge (controls style; still evidence-only)",
+    )
+    engine: str = Field(
+        default="muhasibi",
+        description="muhasibi|baseline - reasoning engine to use",
+    )
 
 
 class Citation(BaseModel):
@@ -126,10 +134,13 @@ async def ask_question(request: AskRequest):
 
     Args:
         request: The question and language preference.
+            - engine: "muhasibi" (default) for full reasoning, "baseline" for simple evidence retrieval
 
     Returns:
         AskResponse: Answer with citations, or refusal if no evidence.
     """
+    from apps.api.core.baseline_answer import generate_baseline_answer
+
     async with get_session() as session:
         # Build resolver from DB (best-effort; if DB empty this remains empty and system will refuse)
         resolver = EntityResolver()
@@ -153,6 +164,17 @@ async def ask_question(request: AskRequest):
         # Attach session for middleware retrieval (keeps middleware signature stable for tests)
         retriever._session = session  # type: ignore[attr-defined]
 
+        # Use baseline mode if requested
+        if request.engine == "baseline":
+            return await generate_baseline_answer(
+                question=request.question,
+                retriever=retriever,
+                resolver=resolver,
+                guardrails=guardrails,
+                language=request.language,
+            )
+
+        # Default: Muhasibi mode
         llm_client = None
         try:
             cfg = ProviderConfig.from_env()
@@ -169,7 +191,7 @@ async def ask_question(request: AskRequest):
             guardrails=guardrails,
         )
 
-        return await middleware.process(request.question, language=request.language)
+        return await middleware.process(request.question, language=request.language, mode=request.mode)
 
 
 @router.post("/search/vector", response_model=SearchResponse)

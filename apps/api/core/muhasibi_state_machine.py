@@ -52,6 +52,7 @@ class StateContext:
     # Input
     question: str
     language: str = "ar"
+    mode: str = "answer"  # answer|debate|socratic|judge
 
     # LISTEN outputs
     normalized_question: str = ""
@@ -130,7 +131,7 @@ class MuhasibiMiddleware:
         self.llm_client: Optional[MuhasibiLLMClient] = llm_client
         self.guardrails = guardrails
 
-    async def process(self, question: str, language: str = "ar") -> FinalResponse:
+    async def process(self, question: str, language: str = "ar", mode: str = "answer") -> FinalResponse:
         """
         Process a question through the full Muḥāsibī pipeline.
 
@@ -141,7 +142,7 @@ class MuhasibiMiddleware:
         Returns:
             FinalResponse following the required schema.
         """
-        ctx = StateContext(question=question, language=language)
+        ctx = StateContext(question=question, language=language, mode=mode)
 
         # State machine execution
         current_state = MuhasibiState.LISTEN
@@ -399,6 +400,7 @@ class MuhasibiMiddleware:
                 question=ctx.question,
                 evidence_packets=ctx.evidence_packets,
                 detected_entities=ctx.detected_entities,
+                mode=ctx.mode,
             )
             if result:
                 ctx.answer_ar = result.answer_ar

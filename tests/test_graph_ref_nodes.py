@@ -22,46 +22,47 @@ async def test_expand_graph_traverses_ref_nodes():
         pytest.skip("Requires DATABASE_URL and RUN_DB_TESTS=1")
 
     async with get_session() as session:
-        # Clean any residue for deterministic test reruns
-        await session.execute(
-            text(
-                """
-                DELETE FROM edge
-                WHERE (from_type, from_id, rel_type, to_type, to_id) IN (
-                    ('sub_value','SV_A','MENTIONS_REF','ref','quran:البقرة:1'),
-                    ('sub_value','SV_B','MENTIONS_REF','ref','quran:البقرة:1')
+        try:
+            await session.execute(
+                text(
+                    """
+                    INSERT INTO edge (from_type, from_id, rel_type, to_type, to_id,
+                                      created_method, created_by, justification, status)
+                    VALUES
+                        ('sub_value','SV_A','MENTIONS_REF','ref','quran:البقرة:1',
+                         'rule_exact_match','test','quran:البقرة:1','approved'),
+                        ('sub_value','SV_B','MENTIONS_REF','ref','quran:البقرة:1',
+                         'rule_exact_match','test','quran:البقرة:1','approved')
+                    ON CONFLICT DO NOTHING
+                    """
                 )
-                """
             )
-        )
-        await session.commit()
+            await session.commit()
 
-        await session.execute(
-            text(
-                """
-                INSERT INTO edge (from_type, from_id, rel_type, to_type, to_id,
-                                  created_method, created_by, justification, status)
-                VALUES
-                    ('sub_value','SV_A','MENTIONS_REF','ref','quran:البقرة:1',
-                     'rule_exact_match','test','quran:البقرة:1','approved'),
-                    ('sub_value','SV_B','MENTIONS_REF','ref','quran:البقرة:1',
-                     'rule_exact_match','test','quran:البقرة:1','approved')
-                ON CONFLICT DO NOTHING
-                """
+            reached = await expand_graph(
+                session,
+                EntityType.SUB_VALUE,
+                "SV_A",
+                depth=2,
+                relationship_types=["MENTIONS_REF"],
             )
-        )
-        await session.commit()
 
-        reached = await expand_graph(
-            session,
-            EntityType.SUB_VALUE,
-            "SV_A",
-            depth=2,
-            relationship_types=["MENTIONS_REF"],
-        )
-
-        # We should reach the ref node (depth=1) and SV_B (depth=2).
-        assert any(r["neighbor_type"] == "ref" and r["neighbor_id"] == "quran:البقرة:1" for r in reached)
-        assert any(r["neighbor_type"] == "sub_value" and r["neighbor_id"] == "SV_B" for r in reached)
+            # We should reach the ref node (depth=1) and SV_B (depth=2).
+            assert any(r["neighbor_type"] == "ref" and r["neighbor_id"] == "quran:البقرة:1" for r in reached)
+            assert any(r["neighbor_type"] == "sub_value" and r["neighbor_id"] == "SV_B" for r in reached)
+        finally:
+            await session.execute(
+                text(
+                    """
+                    DELETE FROM edge
+                    WHERE created_by='test'
+                      AND rel_type='MENTIONS_REF'
+                      AND to_type='ref'
+                      AND to_id='quran:البقرة:1'
+                      AND from_id IN ('SV_A','SV_B')
+                    """
+                )
+            )
+            await session.commit()
 
 
