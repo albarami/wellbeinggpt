@@ -16,6 +16,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
+from apps.api.llm.azure_env_fallback import load_azure_normalized_config_from_env
 
 class ProviderType(str, Enum):
     """Supported provider types."""
@@ -61,12 +62,26 @@ class ProviderConfig:
         except ValueError:
             provider_type = ProviderType.AZURE_RESPONSES
 
+        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "") or ""
+        api_key = os.getenv("AZURE_OPENAI_API_KEY", "") or ""
+        api_version = os.getenv("AZURE_OPENAI_API_VERSION", "") or "2024-10-21"
+        deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "") or ""
+
+        # Support non-standard user .env keys (ENDPOINT_5 / API_KEY_5 / DEPLOYMENT_5)
+        if not (endpoint and api_key and deployment_name):
+            norm = load_azure_normalized_config_from_env()
+            if norm:
+                endpoint = endpoint or norm.endpoint
+                api_key = api_key or norm.api_key
+                api_version = api_version or norm.api_version
+                deployment_name = deployment_name or norm.deployment_name
+
         return cls(
             provider_type=provider_type,
-            endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", ""),
-            api_key=os.getenv("AZURE_OPENAI_API_KEY", ""),
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-21"),
-            deployment_name=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", ""),
+            endpoint=endpoint,
+            api_key=api_key,
+            api_version=api_version,
+            deployment_name=deployment_name,
             model_name=os.getenv("AZURE_OPENAI_MODEL_NAME"),
             max_tokens=int(os.getenv("LLM_MAX_TOKENS", "4096")),
             temperature=float(os.getenv("LLM_TEMPERATURE", "0.0")),

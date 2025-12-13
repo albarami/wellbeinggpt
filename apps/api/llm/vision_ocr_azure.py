@@ -21,8 +21,12 @@ from typing import Optional
 
 try:
     from openai import AsyncAzureOpenAI
+    from openai.types.chat import ChatCompletionMessageParam
 except ImportError:  # pragma: no cover
     AsyncAzureOpenAI = None
+    ChatCompletionMessageParam = object
+
+from apps.api.llm.azure_env_fallback import load_azure_normalized_config_from_env
 
 
 @dataclass(frozen=True)
@@ -35,14 +39,28 @@ class VisionOcrConfig:
 
     @classmethod
     def from_env(cls) -> "VisionOcrConfig":
+        # Canonical vars (preferred)
+        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "") or ""
+        api_key = os.getenv("AZURE_OPENAI_API_KEY", "") or ""
+        api_version = os.getenv("AZURE_OPENAI_API_VERSION", "") or "2024-10-21"
+        deployment = os.getenv("AZURE_OPENAI_VISION_DEPLOYMENT_NAME", "") or os.getenv(
+            "AZURE_OPENAI_DEPLOYMENT_NAME", ""
+        )
+
+        # Fallback to normalized config if canonical vars not present
+        if not (endpoint and api_key and deployment):
+            norm = load_azure_normalized_config_from_env()
+            if norm:
+                endpoint = norm.endpoint
+                api_key = norm.api_key
+                api_version = norm.api_version
+                deployment = deployment or norm.deployment_name
+
         return cls(
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", ""),
-            azure_api_key=os.getenv("AZURE_OPENAI_API_KEY", ""),
-            azure_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-21"),
-            vision_deployment=os.getenv(
-                "AZURE_OPENAI_VISION_DEPLOYMENT_NAME",
-                os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", ""),
-            ),
+            azure_endpoint=endpoint,
+            azure_api_key=api_key,
+            azure_api_version=api_version,
+            vision_deployment=deployment,
             timeout=int(os.getenv("LLM_TIMEOUT", "60")),
         )
 
@@ -123,34 +141,24 @@ class VisionOcrClient:
                 "- أرجع النص فقط بدون أي مقدمة.\n"
             )
 
-            resp = await client.responses.create(
+            messages: list[ChatCompletionMessageParam] = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                    ],
+                }
+            ]
+
+            resp = await client.chat.completions.create(
                 model=self.config.vision_deployment,
-                input=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "input_text", "text": prompt},
-                            {"type": "input_image", "image_url": data_url},
-                        ],
-                    }
-                ],
+                messages=messages,
                 temperature=0.0,
-                max_output_tokens=4096,
+                max_tokens=4096,
             )
-
-            # openai SDK convenience
-            text = getattr(resp, "output_text", None)
-            if isinstance(text, str) and text.strip():
-                return OcrResult(image_sha256=image_sha256, text_ar=text.strip())
-
-            # Fallback parsing
-            out_text = ""
-            for item in getattr(resp, "output", []) or []:
-                for c in getattr(item, "content", []) or []:
-                    t = getattr(c, "text", None)
-                    if isinstance(t, str):
-                        out_text += t
-            return OcrResult(image_sha256=image_sha256, text_ar=out_text.strip())
+            content = resp.choices[0].message.content or ""
+            return OcrResult(image_sha256=image_sha256, text_ar=content.strip())
         except Exception as e:  # pragma: no cover
             return OcrResult(image_sha256=image_sha256, text_ar="", error=str(e))
 

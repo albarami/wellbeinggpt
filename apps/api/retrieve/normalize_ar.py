@@ -7,6 +7,7 @@ Provides deterministic normalization for Arabic text used in:
 - Embedding (consistent vectors)
 """
 
+import unicodedata
 import re
 from typing import Optional
 
@@ -14,6 +15,13 @@ from typing import Optional
 # =============================================================================
 # Arabic Unicode Ranges and Characters
 # =============================================================================
+
+# Unicode bidi/format control characters that frequently appear in DOCX exports
+# and can break exact matching while being invisible in rendering.
+# Reason: enterprise citation/entity matching must be robust to these artifacts.
+BIDI_CONTROL_CHARS = re.compile(
+    r"[\u200E\u200F\u202A-\u202E\u2066-\u2069\uFEFF\u200B-\u200D\u2060]"
+)
 
 # Diacritics (Tashkeel) - optional vowel marks
 ARABIC_DIACRITICS = re.compile(r"[\u064B-\u065F\u0670]")
@@ -245,6 +253,13 @@ def normalize_arabic(
     """
     if not text:
         return ""
+
+    # Unicode normalization: folds presentation forms and compatibility characters.
+    # Reason: DOCX/OCR may emit Arabic presentation forms that look identical but don't compare equal.
+    text = unicodedata.normalize("NFKC", text)
+
+    # Remove invisible bidi/format markers early.
+    text = BIDI_CONTROL_CHARS.sub("", text)
 
     # Apply normalizations in order
     if remove_diacritics_flag:

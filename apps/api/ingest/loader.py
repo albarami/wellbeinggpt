@@ -5,6 +5,7 @@ Loads canonical JSON into PostgreSQL database with versioning and provenance.
 """
 
 import json
+import inspect
 import uuid
 from datetime import datetime
 from typing import Any, Optional
@@ -21,6 +22,29 @@ from apps.api.retrieve.azure_search_indexer import (
     is_configured as azure_search_is_configured,
 )
 import os
+
+
+async def _scalar_one_or_none(
+    session: AsyncSession, sql: str, params: dict[str, Any]
+) -> Optional[str]:
+    """
+    Best-effort scalar fetch helper.
+
+    Notes:
+    - Returns None on missing rows or when running under mock sessions in unit tests.
+    """
+    result = await session.execute(text(sql), params)
+    try:
+        val = result.scalar_one_or_none()
+        if inspect.isawaitable(val):  # AsyncMock in unit tests
+            val = await val
+    except Exception:
+        return None
+    if isinstance(val, uuid.UUID):
+        return str(val)
+    if isinstance(val, str):
+        return val
+    return None
 
 
 async def create_source_document(
@@ -43,7 +67,7 @@ async def create_source_document(
     """
     doc_id = str(uuid.uuid4())
 
-    await session.execute(
+    result = await session.execute(
         text("""
             INSERT INTO source_document (id, file_name, file_hash, framework_version)
             VALUES (:id, :file_name, :file_hash, :framework_version)
@@ -59,8 +83,11 @@ async def create_source_document(
             "framework_version": framework_version,
         }
     )
-
-    return doc_id
+    # Important: when ON CONFLICT triggers, the inserted id is ignored; RETURNING yields the existing id.
+    persisted_id = result.scalar_one()
+    if inspect.isawaitable(persisted_id):  # AsyncMock in unit tests
+        persisted_id = await persisted_id
+    return str(persisted_id)
 
 
 async def create_ingestion_run(
@@ -145,6 +172,14 @@ async def load_pillar(
         source_doc_id: Source document ID.
         run_id: Ingestion run ID.
     """
+    # Idempotency:
+    # Prefer existing row by natural key (source_doc_id, name_ar) if present.
+    resolved_id = await _scalar_one_or_none(
+        session,
+        "SELECT id FROM pillar WHERE source_doc_id = :sd AND name_ar = :n",
+        {"sd": source_doc_id, "n": pillar_data["name_ar"]},
+    ) or pillar_data["id"]
+
     await session.execute(
         text("""
             INSERT INTO pillar (id, name_ar, name_en, description_ar,
@@ -153,11 +188,15 @@ async def load_pillar(
                     :source_doc_id, :source_anchor, :run_id)
             ON CONFLICT (id) DO UPDATE SET
                 name_ar = EXCLUDED.name_ar,
+                name_en = EXCLUDED.name_en,
                 description_ar = EXCLUDED.description_ar,
+                source_doc_id = EXCLUDED.source_doc_id,
+                source_anchor = EXCLUDED.source_anchor,
+                ingestion_run_id = EXCLUDED.ingestion_run_id,
                 updated_at = NOW()
         """),
         {
-            "id": pillar_data["id"],
+            "id": resolved_id,
             "name_ar": pillar_data["name_ar"],
             "name_en": pillar_data.get("name_en"),
             "description_ar": pillar_data.get("description_ar"),
@@ -170,6 +209,7 @@ async def load_pillar(
             "run_id": run_id,
         }
     )
+    return resolved_id
 
 
 async def load_core_value(
@@ -194,6 +234,12 @@ async def load_core_value(
     if cv_data.get("definition"):
         definition_ar = cv_data["definition"].get("text_ar")
 
+    resolved_id = await _scalar_one_or_none(
+        session,
+        "SELECT id FROM core_value WHERE pillar_id = :pid AND name_ar = :n",
+        {"pid": pillar_id, "n": cv_data["name_ar"]},
+    ) or cv_data["id"]
+
     await session.execute(
         text("""
             INSERT INTO core_value (id, pillar_id, name_ar, name_en, definition_ar,
@@ -201,12 +247,17 @@ async def load_core_value(
             VALUES (:id, :pillar_id, :name_ar, :name_en, :definition_ar,
                     :source_doc_id, :source_anchor, :run_id)
             ON CONFLICT (id) DO UPDATE SET
+                pillar_id = EXCLUDED.pillar_id,
                 name_ar = EXCLUDED.name_ar,
+                name_en = EXCLUDED.name_en,
                 definition_ar = EXCLUDED.definition_ar,
+                source_doc_id = EXCLUDED.source_doc_id,
+                source_anchor = EXCLUDED.source_anchor,
+                ingestion_run_id = EXCLUDED.ingestion_run_id,
                 updated_at = NOW()
         """),
         {
-            "id": cv_data["id"],
+            "id": resolved_id,
             "pillar_id": pillar_id,
             "name_ar": cv_data["name_ar"],
             "name_en": cv_data.get("name_en"),
@@ -226,7 +277,7 @@ async def load_core_value(
         await load_text_block(
             session,
             entity_type="core_value",
-            entity_id=cv_data["id"],
+            entity_id=resolved_id,
             block_type="definition",
             text_ar=definition_ar,
             source_doc_id=source_doc_id,
@@ -237,6 +288,7 @@ async def load_core_value(
             ),
             run_id=run_id,
         )
+    return resolved_id
 
 
 async def load_sub_value(
@@ -260,6 +312,12 @@ async def load_sub_value(
     if sv_data.get("definition"):
         definition_ar = sv_data["definition"].get("text_ar")
 
+    resolved_id = await _scalar_one_or_none(
+        session,
+        "SELECT id FROM sub_value WHERE core_value_id = :cid AND name_ar = :n",
+        {"cid": core_value_id, "n": sv_data["name_ar"]},
+    ) or sv_data["id"]
+
     await session.execute(
         text("""
             INSERT INTO sub_value (id, core_value_id, name_ar, name_en, definition_ar,
@@ -267,12 +325,17 @@ async def load_sub_value(
             VALUES (:id, :core_value_id, :name_ar, :name_en, :definition_ar,
                     :source_doc_id, :source_anchor, :run_id)
             ON CONFLICT (id) DO UPDATE SET
+                core_value_id = EXCLUDED.core_value_id,
                 name_ar = EXCLUDED.name_ar,
+                name_en = EXCLUDED.name_en,
                 definition_ar = EXCLUDED.definition_ar,
+                source_doc_id = EXCLUDED.source_doc_id,
+                source_anchor = EXCLUDED.source_anchor,
+                ingestion_run_id = EXCLUDED.ingestion_run_id,
                 updated_at = NOW()
         """),
         {
-            "id": sv_data["id"],
+            "id": resolved_id,
             "core_value_id": core_value_id,
             "name_ar": sv_data["name_ar"],
             "name_en": sv_data.get("name_en"),
@@ -292,7 +355,7 @@ async def load_sub_value(
         await load_text_block(
             session,
             entity_type="sub_value",
-            entity_id=sv_data["id"],
+            entity_id=resolved_id,
             block_type="definition",
             text_ar=definition_ar,
             source_doc_id=source_doc_id,
@@ -303,6 +366,7 @@ async def load_sub_value(
             ),
             run_id=run_id,
         )
+    return resolved_id
 
 
 async def load_text_block(
@@ -331,15 +395,49 @@ async def load_text_block(
     Returns:
         The text block ID.
     """
-    block_id = str(uuid.uuid4())
+    # Idempotent upsert by natural key (source_doc_id, entity_type, entity_id, block_type).
+    existing_id = await _scalar_one_or_none(
+        session,
+        """
+        SELECT id
+        FROM text_block
+        WHERE source_doc_id = :sd
+          AND entity_type = :et
+          AND entity_id = :eid
+          AND block_type = :bt
+        """,
+        {"sd": source_doc_id, "et": entity_type, "eid": entity_id, "bt": block_type},
+    )
+    if existing_id:
+        await session.execute(
+            text(
+                """
+                UPDATE text_block
+                SET text_ar = :text_ar,
+                    source_anchor = :source_anchor,
+                    ingestion_run_id = :run_id
+                WHERE id = :id
+                """
+            ),
+            {
+                "id": existing_id,
+                "text_ar": text_ar,
+                "source_anchor": json.dumps(source_anchor),
+                "run_id": run_id,
+            },
+        )
+        return existing_id
 
+    block_id = str(uuid.uuid4())
     await session.execute(
-        text("""
+        text(
+            """
             INSERT INTO text_block (id, entity_type, entity_id, block_type, text_ar,
                                    source_doc_id, source_anchor, ingestion_run_id)
             VALUES (:id, :entity_type, :entity_id, :block_type, :text_ar,
                     :source_doc_id, :source_anchor, :run_id)
-        """),
+            """
+        ),
         {
             "id": block_id,
             "entity_type": entity_type,
@@ -349,9 +447,8 @@ async def load_text_block(
             "source_doc_id": source_doc_id,
             "source_anchor": json.dumps(source_anchor),
             "run_id": run_id,
-        }
+        },
     )
-
     return block_id
 
 
@@ -397,6 +494,61 @@ async def load_evidence(
     Returns:
         The evidence ID.
     """
+    # Idempotent dedupe by (source_doc_id, entity, evidence_type, ref_norm/ref_raw, text_ar hash).
+    existing_id = await _scalar_one_or_none(
+        session,
+        """
+        SELECT id
+        FROM evidence
+        WHERE source_doc_id = :sd
+          AND entity_type = :et
+          AND entity_id = :eid
+          AND evidence_type = :ev
+          AND COALESCE(ref_norm,'') = COALESCE(:ref_norm,'')
+          AND md5(text_ar) = md5(:text_ar)
+        """,
+        {
+            "sd": source_doc_id,
+            "et": entity_type,
+            "eid": entity_id,
+            "ev": evidence_type,
+            "ref_norm": ref_norm or "",
+            "text_ar": text_ar,
+        },
+    )
+    if existing_id:
+        return existing_id
+
+    # Defensive normalization for enterprise DB constraints:
+    # - OCR may produce long "ref_norm" or misparsed "surah_name_ar"/collection strings.
+    # - For non-success parses, we store only raw fields and clear structured columns.
+    if (parse_status or "").lower() != "success":
+        ref_norm = None
+        surah_name_ar = None
+        surah_number = None
+        ayah_number = None
+        hadith_collection = None
+        hadith_number = None
+    else:
+        if ref_norm and len(ref_norm) > 255:
+            # Avoid truncation + false SHARES_REF edges.
+            ref_norm = None
+            parse_status = "needs_review"
+            surah_name_ar = None
+            surah_number = None
+            ayah_number = None
+            hadith_collection = None
+            hadith_number = None
+        if surah_name_ar and len(surah_name_ar) > 100:
+            parse_status = "needs_review"
+            surah_name_ar = None
+            surah_number = None
+            ayah_number = None
+        if hadith_collection and len(hadith_collection) > 100:
+            parse_status = "needs_review"
+            hadith_collection = None
+            hadith_number = None
+
     evidence_id = str(uuid.uuid4())
 
     await session.execute(
@@ -467,19 +619,47 @@ async def load_canonical_json_to_db(
     # Create ingestion run
     run_id = await create_ingestion_run(session, source_doc_id)
 
+    # Enterprise-grade default: purge existing derived rows for this source_doc_id before re-ingestion.
+    # Reason: DOCX is the source of truth; ingestion must be repeatable and converge to the same DB state.
+    purge = os.getenv("INGEST_PURGE_EXISTING", "true").lower() in ("1", "true", "yes")
+    if purge:
+        # Delete in dependency-safe order.
+        for stmt in [
+            "DELETE FROM edge WHERE from_id IN (SELECT id FROM pillar WHERE source_doc_id=:sd) OR to_id IN (SELECT id FROM pillar WHERE source_doc_id=:sd)",
+            "DELETE FROM chunk_ref WHERE chunk_id IN (SELECT chunk_id FROM chunk WHERE source_doc_id=:sd)",
+            "DELETE FROM embedding WHERE chunk_id IN (SELECT chunk_id FROM chunk WHERE source_doc_id=:sd)",
+            "DELETE FROM chunk WHERE source_doc_id=:sd",
+            "DELETE FROM evidence WHERE source_doc_id=:sd",
+            "DELETE FROM text_block WHERE source_doc_id=:sd",
+            "DELETE FROM sub_value WHERE source_doc_id=:sd",
+            "DELETE FROM core_value WHERE source_doc_id=:sd",
+            "DELETE FROM pillar WHERE source_doc_id=:sd",
+        ]:
+            try:
+                await session.execute(text(stmt), {"sd": source_doc_id})
+            except Exception:
+                continue
+
     # Load pillars and their contents
     pillars = canonical_data.get("pillars", [])
     total_cv = 0
     total_sv = 0
     total_evidence = 0
 
+    # ID maps: canonical id -> persisted id
+    pillar_id_map: dict[str, str] = {}
+    core_id_map: dict[str, str] = {}
+    sub_id_map: dict[str, str] = {}
+
     for pillar_data in pillars:
-        await load_pillar(session, pillar_data, source_doc_id, run_id)
+        pillar_db_id = await load_pillar(session, pillar_data, source_doc_id, run_id)
+        pillar_id_map[str(pillar_data["id"])] = str(pillar_db_id)
 
         for cv_data in pillar_data.get("core_values", []):
-            await load_core_value(
-                session, cv_data, pillar_data["id"], source_doc_id, run_id
+            cv_db_id = await load_core_value(
+                session, cv_data, pillar_db_id, source_doc_id, run_id
             )
+            core_id_map[str(cv_data["id"])] = str(cv_db_id)
             total_cv += 1
 
             # Load evidence for core value
@@ -487,7 +667,7 @@ async def load_canonical_json_to_db(
                 await load_evidence(
                     session=session,
                     entity_type="core_value",
-                    entity_id=cv_data["id"],
+                    entity_id=cv_db_id,
                     evidence_type=ev.get("evidence_type", "book"),
                     ref_raw=ev.get("ref_raw", "") or "",
                     ref_norm=ev.get("ref_norm"),
@@ -505,9 +685,10 @@ async def load_canonical_json_to_db(
                 total_evidence += 1
 
             for sv_data in cv_data.get("sub_values", []):
-                await load_sub_value(
-                    session, sv_data, cv_data["id"], source_doc_id, run_id
+                sv_db_id = await load_sub_value(
+                    session, sv_data, cv_db_id, source_doc_id, run_id
                 )
+                sub_id_map[str(sv_data["id"])] = str(sv_db_id)
                 total_sv += 1
 
                 # Load evidence for sub value
@@ -515,7 +696,7 @@ async def load_canonical_json_to_db(
                     await load_evidence(
                         session=session,
                         entity_type="sub_value",
-                        entity_id=sv_data["id"],
+                        entity_id=sv_db_id,
                         evidence_type=ev.get("evidence_type", "book"),
                         ref_raw=ev.get("ref_raw", "") or "",
                         ref_norm=ev.get("ref_norm"),
@@ -542,6 +723,7 @@ async def load_canonical_json_to_db(
             chunks_jsonl_path=chunks_path,
             source_doc_id=source_doc_id,
             run_id=run_id,
+            id_maps={"pillar": pillar_id_map, "core_value": core_id_map, "sub_value": sub_id_map},
         )
         # Embed chunks (best-effort; if not configured, skip)
         try:
@@ -581,6 +763,7 @@ async def load_chunks_jsonl(
     chunks_jsonl_path: str,
     source_doc_id: str,
     run_id: str,
+    id_maps: Optional[dict[str, dict[str, str]]] = None,
 ) -> int:
     """
     Load chunks JSONL (Evidence Packets) into chunk + chunk_ref tables.
@@ -598,6 +781,10 @@ async def load_chunks_jsonl(
             if not line:
                 continue
             row = json.loads(line)
+            entity_type = row.get("entity_type", "")
+            entity_id = row.get("entity_id", "")
+            if id_maps and entity_type in id_maps and entity_id in id_maps[entity_type]:
+                entity_id = id_maps[entity_type][entity_id]
             await session.execute(
                 text(
                     """
@@ -612,8 +799,8 @@ async def load_chunks_jsonl(
                 ),
                 {
                     "chunk_id": row["chunk_id"],
-                    "entity_type": row["entity_type"],
-                    "entity_id": row["entity_id"],
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
                     "chunk_type": row["chunk_type"],
                     "text_ar": row.get("text_ar", ""),
                     "text_en": row.get("text_en"),
@@ -629,6 +816,7 @@ async def load_chunks_jsonl(
                         """
                         INSERT INTO chunk_ref (chunk_id, ref_type, ref)
                         VALUES (:chunk_id, :ref_type, :ref)
+                        ON CONFLICT DO NOTHING
                         """
                     ),
                     {

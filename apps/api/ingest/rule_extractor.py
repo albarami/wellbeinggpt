@@ -376,6 +376,29 @@ class RuleExtractor:
                 self._start_core_value_from_heading(para, doc_hash, source_doc, text)
                 return
 
+        # If sub-values were listed earlier (e.g., in a 3-column table), later sections often
+        # introduce each sub-value with a numbered/short heading like "2. الفضول/ الفضول العلمي".
+        # Prefer matching against already-known sub-values to attach definitions/evidence correctly.
+        if (
+            self.current_core_value
+            and self.current_core_value.sub_values
+            and self.state in (
+                ExtractorState.IN_CORE_VALUE,
+                ExtractorState.IN_SUB_VALUES_LIST,
+                ExtractorState.IN_SUB_VALUE,
+                ExtractorState.IN_DEFINITION,
+                ExtractorState.IN_EVIDENCE,
+            )
+        ):
+            candidate = self._clean_value_name(text.strip().rstrip(":：").strip())
+            if candidate and len(candidate) <= 80:
+                cand_n = normalize_for_matching(candidate)
+                for sv in self.current_core_value.sub_values:
+                    if normalize_for_matching(sv.name_ar) == cand_n:
+                        self._finalize_definition_and_evidence()
+                        self._start_sub_value_from_heading(para, doc_hash, source_doc, candidate)
+                        return
+
         # Detect sub-value headings inside a core value (e.g., "التوحيد:" / "العزة")
         if self._is_sub_value_heading(text) and self.current_core_value:
             self._finalize_definition_and_evidence()
@@ -577,7 +600,16 @@ class RuleExtractor:
     def _start_sub_value_from_heading(self, para: ParsedParagraph, doc_hash: str, source_doc: str, text: str) -> None:
         if not self.current_core_value:
             return
-        name = text.strip().rstrip(":：").strip()
+        name = self._clean_value_name(text.strip().rstrip(":：").strip())
+        if not name:
+            return
+        # Reuse existing sub_value row if already listed under this core value.
+        n = normalize_for_matching(name)
+        for existing in self.current_core_value.sub_values:
+            if normalize_for_matching(existing.name_ar) == n:
+                self.current_sub_value = existing
+                self.state = ExtractorState.IN_SUB_VALUE
+                return
         self._add_sub_value_name(para, doc_hash, source_doc, name, raw_text=text)
 
     def _is_pillars_list_marker(self, normalized_text: str) -> bool:
@@ -912,12 +944,17 @@ class RuleExtractor:
                     and not (t.startswith("﴿") or t.startswith("{") or t.startswith("(") or t.startswith("«"))
                 ):
                     cv = self._subvalues_table_core_order[self._subvalues_table_col]
+                    # Clean numbering/bullets from table cells like "1. التفكير النقدي"
+                    cleaned = self._clean_value_name(t)
+                    if not cleaned:
+                        self._subvalues_table_col = (self._subvalues_table_col + 1) % len(self._subvalues_table_core_order)
+                        return
                     # Temporarily set current_core_value so existing helper attaches correctly
                     prev_cv = self.current_core_value
                     prev_sv = self.current_sub_value
                     prev_state = self.state
                     self.current_core_value = cv
-                    self._add_sub_value_name(para, doc_hash, source_doc, t, raw_text=t)
+                    self._add_sub_value_name(para, doc_hash, source_doc, cleaned, raw_text=t)
                     self.current_core_value = prev_cv
                     # Table listing only: do not enter IN_SUB_VALUE state (no definitions/evidence here)
                     self.current_sub_value = prev_sv
@@ -1031,21 +1068,26 @@ class RuleExtractor:
         if not self.current_core_value:
             return
 
-        clean_name = (name or "").strip().rstrip(":：").strip()
+        # Clean numbering/bullets early (table cells often start with "1." or "(1)")
+        clean_name = self._clean_value_name((name or "").strip()).strip().rstrip(":：").strip()
         if not clean_name or len(clean_name) < 2:
             return
 
         # Reject obvious non-entity prose / section lines
         if "\n" in clean_name:
             return
-        # Drop citation footnotes / bibliographic lines
-        if re.match(r"^\d+\s*[-–—]?\s*", clean_name):
+        # Drop citation footnotes / bibliographic lines (heuristic)
+        # Reason: Many footnotes start with a number and then bibliographic info.
+        # We already stripped list numbering; so only reject if it still looks like a footnote.
+        if re.search(r"(دار\s+|بيروت|الطبعة|تحقيق|مكتبة|مجلة|جامعة|عام\s+\d{3,4})", clean_name):
             return
         if normalize_for_matching(clean_name).startswith(normalize_for_matching("تفسير")):
             return
         if self._is_definition_marker(clean_name) or self._is_evidence_marker(clean_name):
             return
         if clean_name.startswith("قال تعالى") or clean_name.startswith("يقول الله تعالى") or clean_name.startswith("وفي الحديث"):
+            return
+        if clean_name.startswith("و قال") or clean_name.startswith("وقال") or clean_name.startswith("قال"):
             return
         if clean_name.startswith("وتندرج") or clean_name.startswith("تندرج") or "قيم أحفاد" in clean_name:
             return
@@ -1093,6 +1135,13 @@ class RuleExtractor:
             text = text.split("  ")[0]
         # Remove extra whitespace
         text = " ".join(text.split())
+        # Normalize slash separators (OCR/table headings often vary spacing around '/')
+        text = re.sub(r"\s*[\/／]\s*", "/", text)
+        # If in the form "NAME: ..." keep NAME only (common in headings, but avoid capturing prose).
+        if ":" in text:
+            left, right = text.split(":", 1)
+            if len(left.strip()) <= 40 and right.strip():
+                text = left.strip()
         return text.strip(" :.،")
 
     def _looks_like_list_item(self, text: str) -> bool:
@@ -1115,7 +1164,13 @@ class RuleExtractor:
             return True
         # Some documents list values as "الاسم:" with short lead-in
         if ":" in t and len(t.split(":")[0]) <= 40:
-            return True
+            # Only treat as a value name if it's essentially a heading:
+            # - ends with ":" (e.g., "التوحيد:")
+            # - or suffix is empty/very short (avoids dictionary-like prose: "الحقيقة: ...")
+            left, right = t.split(":", 1)
+            if not right.strip() or len(right.strip()) <= 5 or t.strip().endswith(":"):
+                return True
+            return False
         return False
 
     def _maybe_assign_fallback_definition(
