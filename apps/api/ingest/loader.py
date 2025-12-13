@@ -988,6 +988,9 @@ async def build_edges_for_source(session: AsyncSession, source_doc_id: str) -> N
     - CoreValue CONTAINS SubValue
     - (Core/Sub) SUPPORTED_BY Evidence
     - (Core/Sub) SHARES_REF (cross-links) when multiple entities share the same ref_norm
+    - Evidence REFERS_TO RefNode (quran/hadith/book reference node)
+    - (Core/Sub) MENTIONS_REF RefNode (direct edge for fast traversal)
+    - SubValue SAME_NAME SubValue (cross-core duplicates)
     """
     # CONTAINS: pillar -> core_value
     await session.execute(
@@ -1037,6 +1040,61 @@ async def build_edges_for_source(session: AsyncSession, source_doc_id: str) -> N
         {"source_doc_id": source_doc_id},
     )
 
+    # REFERS_TO: evidence -> ref node (first-class reference nodes).
+    # Node identity: "<evidence_type>:<ref_norm>" (e.g., "quran:البقرة:255").
+    # Reason: enables traversals like sub_value -> ref -> other sub_values sharing the same verse/hadith.
+    await session.execute(
+        text(
+            """
+            INSERT INTO edge (from_type, from_id, rel_type, to_type, to_id,
+                              created_method, created_by, justification, status)
+            SELECT
+                'evidence',
+                e.id::text,
+                'REFERS_TO',
+                'ref',
+                e.evidence_type || ':' || e.ref_norm,
+                'rule_exact_match',
+                'system',
+                e.evidence_type || ':' || e.ref_norm,
+                'approved'
+            FROM evidence e
+            WHERE e.source_doc_id = :source_doc_id
+              AND e.ref_norm IS NOT NULL
+              AND e.ref_norm <> ''
+            ON CONFLICT DO NOTHING
+            """
+        ),
+        {"source_doc_id": source_doc_id},
+    )
+
+    # MENTIONS_REF: entity -> ref node (direct edge).
+    # Reason: avoids forcing traversal through evidence nodes at runtime.
+    await session.execute(
+        text(
+            """
+            INSERT INTO edge (from_type, from_id, rel_type, to_type, to_id,
+                              created_method, created_by, justification, status)
+            SELECT
+                e.entity_type,
+                e.entity_id,
+                'MENTIONS_REF',
+                'ref',
+                e.evidence_type || ':' || e.ref_norm,
+                'rule_exact_match',
+                'system',
+                e.evidence_type || ':' || e.ref_norm,
+                'approved'
+            FROM evidence e
+            WHERE e.source_doc_id = :source_doc_id
+              AND e.ref_norm IS NOT NULL
+              AND e.ref_norm <> ''
+            ON CONFLICT DO NOTHING
+            """
+        ),
+        {"source_doc_id": source_doc_id},
+    )
+
     # SHARES_REF: cross-link entities that share the same normalized reference.
     # This creates an explicit graph signal for "same verse/hadith used in multiple places",
     # enabling cross-pillar discovery without relying on vector-only coincidence.
@@ -1078,6 +1136,51 @@ async def build_edges_for_source(session: AsyncSession, source_doc_id: str) -> N
                 'rule_exact_match',
                 'system',
                 p.evidence_type || ':' || p.ref_norm,
+                'approved'
+            FROM pairs p
+            ON CONFLICT DO NOTHING
+            """
+        ),
+        {"source_doc_id": source_doc_id},
+    )
+
+    # SAME_NAME: cross-link sub-values that have identical names but belong to different cores.
+    # Reason: supports enterprise discovery queries like "show me all uses of الالتزام across pillars".
+    await session.execute(
+        text(
+            """
+            WITH dups AS (
+                SELECT name_ar
+                FROM sub_value
+                WHERE source_doc_id = :source_doc_id
+                GROUP BY name_ar
+                HAVING count(*) > 1
+            ),
+            pairs AS (
+                SELECT
+                    sv1.id AS from_id,
+                    sv2.id AS to_id,
+                    sv1.name_ar AS name_ar
+                FROM sub_value sv1
+                JOIN sub_value sv2
+                  ON sv1.name_ar = sv2.name_ar
+                 AND sv1.core_value_id <> sv2.core_value_id
+                 AND sv1.id < sv2.id
+                JOIN dups d ON d.name_ar = sv1.name_ar
+                WHERE sv1.source_doc_id = :source_doc_id
+                  AND sv2.source_doc_id = :source_doc_id
+            )
+            INSERT INTO edge (from_type, from_id, rel_type, to_type, to_id,
+                              created_method, created_by, justification, status)
+            SELECT
+                'sub_value',
+                p.from_id,
+                'SAME_NAME',
+                'sub_value',
+                p.to_id,
+                'rule_exact_match',
+                'system',
+                p.name_ar,
                 'approved'
             FROM pairs p
             ON CONFLICT DO NOTHING

@@ -86,7 +86,14 @@ class HybridRetriever:
                     et,
                     entity_id,
                     depth=inputs.graph_depth,
-                    relationship_types=["CONTAINS", "SUPPORTED_BY", "SHARES_REF"],
+                    relationship_types=[
+                        "CONTAINS",
+                        "SUPPORTED_BY",
+                        "SHARES_REF",
+                        "MENTIONS_REF",
+                        "REFERS_TO",
+                        "SAME_NAME",
+                    ],
                 )
                 for n in neighbors:
                     n_type = n.get("neighbor_type")

@@ -14,7 +14,7 @@ from apps.api.core.schemas import EntityType
 
 async def get_entity_neighbors(
     session: AsyncSession,
-    entity_type: EntityType,
+    entity_type: EntityType | str,
     entity_id: str,
     relationship_types: Optional[list[str]] = None,
     direction: str = "both",
@@ -35,6 +35,7 @@ async def get_entity_neighbors(
         List of neighboring entities with edge information.
     """
     neighbors = []
+    et_value = entity_type.value if isinstance(entity_type, EntityType) else str(entity_type)
 
     # Build queries based on direction
     if direction in ("outgoing", "both"):
@@ -52,7 +53,7 @@ async def get_entity_neighbors(
         """
 
         params: dict[str, Any] = {
-            "entity_type": entity_type.value,
+            "entity_type": et_value,
             "entity_id": entity_id,
         }
 
@@ -91,7 +92,7 @@ async def get_entity_neighbors(
         """
 
         params = {
-            "entity_type": entity_type.value,
+            "entity_type": et_value,
             "entity_id": entity_id,
         }
 
@@ -120,7 +121,7 @@ async def get_entity_neighbors(
 
 async def expand_graph(
     session: AsyncSession,
-    entity_type: EntityType,
+    entity_type: EntityType | str,
     entity_id: str,
     depth: int = 2,
     relationship_types: Optional[list[str]] = None,
@@ -143,15 +144,13 @@ async def expand_graph(
 
     # Start with the given entity
     current_level = [(entity_type, entity_id)]
-    visited.add((entity_type.value, entity_id))
+    start_type = entity_type.value if isinstance(entity_type, EntityType) else str(entity_type)
+    visited.add((start_type, entity_id))
 
     for level in range(depth):
         next_level = []
 
         for current_type, current_id in current_level:
-            if isinstance(current_type, str):
-                current_type = EntityType(current_type)
-
             neighbors = await get_entity_neighbors(
                 session,
                 current_type,
