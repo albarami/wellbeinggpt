@@ -209,6 +209,10 @@ async def load_pillar(
             "run_id": run_id,
         }
     )
+
+    # Also store an anchored text_block for any supplemental OCR blocks attached to this pillar.
+    # Reason: Pillar.description_ar is not anchor-scoped; screenshots must remain auditable via userimg_* anchors.
+    # (These blocks are loaded in load_canonical_json_to_db from canonical["supplemental_text_blocks"].)
     return resolved_id
 
 
@@ -625,7 +629,13 @@ async def load_canonical_json_to_db(
     if purge:
         # Delete in dependency-safe order.
         for stmt in [
+            # Edges can point to any entity type; remove all edges involving entities from this source_doc_id.
             "DELETE FROM edge WHERE from_id IN (SELECT id FROM pillar WHERE source_doc_id=:sd) OR to_id IN (SELECT id FROM pillar WHERE source_doc_id=:sd)",
+            "DELETE FROM edge WHERE from_id IN (SELECT id FROM core_value WHERE source_doc_id=:sd) OR to_id IN (SELECT id FROM core_value WHERE source_doc_id=:sd)",
+            "DELETE FROM edge WHERE from_id IN (SELECT id FROM sub_value WHERE source_doc_id=:sd) OR to_id IN (SELECT id FROM sub_value WHERE source_doc_id=:sd)",
+            # evidence.id is UUID while edge.*_id is VARCHAR; cast UUIDs to text for comparison.
+            "DELETE FROM edge WHERE from_id IN (SELECT id::text FROM evidence WHERE source_doc_id=:sd) OR to_id IN (SELECT id::text FROM evidence WHERE source_doc_id=:sd)",
+            "DELETE FROM edge WHERE from_id IN (SELECT chunk_id FROM chunk WHERE source_doc_id=:sd) OR to_id IN (SELECT chunk_id FROM chunk WHERE source_doc_id=:sd)",
             "DELETE FROM chunk_ref WHERE chunk_id IN (SELECT chunk_id FROM chunk WHERE source_doc_id=:sd)",
             "DELETE FROM embedding WHERE chunk_id IN (SELECT chunk_id FROM chunk WHERE source_doc_id=:sd)",
             "DELETE FROM chunk WHERE source_doc_id=:sd",
@@ -712,6 +722,39 @@ async def load_canonical_json_to_db(
                         hadith_number=ev.get("hadith_number"),
                     )
                     total_evidence += 1
+
+    # Load anchored "supplemental OCR" blocks (audit trail for user-provided screenshots).
+    # These blocks are intentionally stored separately from extracted definitions/evidence.
+    for b in canonical_data.get("supplemental_text_blocks", []) or []:
+        try:
+            et = str(b.get("entity_type") or "")
+            eid = str(b.get("entity_id") or "")
+            bt = str(b.get("block_type") or "supplemental_ocr")
+            text_ar = str(b.get("text_ar") or "").strip()
+            source_anchor = b.get("source_anchor") or {}
+            if not et or not eid or not text_ar:
+                continue
+
+            # Map canonical IDs to persisted IDs when maps exist.
+            if et == "pillar" and eid in pillar_id_map:
+                eid = pillar_id_map[eid]
+            elif et == "core_value" and eid in core_id_map:
+                eid = core_id_map[eid]
+            elif et == "sub_value" and eid in sub_id_map:
+                eid = sub_id_map[eid]
+
+            await load_text_block(
+                session=session,
+                entity_type=et,
+                entity_id=eid,
+                block_type=bt,
+                text_ar=text_ar,
+                source_doc_id=source_doc_id,
+                source_anchor=source_anchor if isinstance(source_anchor, dict) else {"source_anchor": str(source_anchor)},
+                run_id=run_id,
+            )
+        except Exception:
+            continue
 
     # Load chunks from generated JSONL if provided in meta (optional)
     chunks_path = canonical_data.get("meta", {}).get("chunks_path")

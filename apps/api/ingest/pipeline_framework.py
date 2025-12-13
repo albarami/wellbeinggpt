@@ -19,6 +19,7 @@ from apps.api.ingest.evidence_parser import parse_evidence_text
 from apps.api.ingest.validator import validate_extraction, validate_evidence_refs, ValidationSeverity
 from apps.api.ingest.canonical_json import extraction_to_canonical_json, save_canonical_json
 from apps.api.ingest.chunker import Chunker
+from apps.api.ingest.supplemental_blocks import build_supplemental_text_blocks_for_canonical
 
 
 @dataclass
@@ -126,16 +127,11 @@ def ingest_framework_docx(
     parsed = reader.read_bytes(docx_bytes, docx_path.name)
 
     # OCR augmentation (ingestion-only) for image-based pages:
-    # In sync contexts (tests/CLI), only run OCR if explicitly enabled/configured.
-    mode = __import__("os").getenv("INGEST_OCR_FROM_IMAGES", "auto").strip().lower()
-    cfg = VisionOcrConfig.from_env()
-    should_run = (mode == "required") or (mode == "auto" and cfg.is_configured())
-    if should_run:
-        import asyncio
+    # In sync contexts (tests/CLI), always run the augmenter because it also appends
+    # supplemental OCR screenshots even when OCR-from-DOCX-images is disabled.
+    import asyncio
 
-        parsed, _ocr_stats = asyncio.run(
-            augment_document_with_image_ocr(parsed, docx_bytes)
-        )
+    parsed, _ocr_stats = asyncio.run(augment_document_with_image_ocr(parsed, docx_bytes))
 
     extractor = RuleExtractor(framework_version=framework_version)
     extracted = extractor.extract(parsed)
@@ -148,6 +144,9 @@ def ingest_framework_docx(
 
     canonical = extraction_to_canonical_json(extracted)
     canonical = _expand_evidence_in_canonical(canonical)
+
+    # Persist *everything* the user sent as anchored text blocks (even if not parsed as definition/evidence).
+    canonical["supplemental_text_blocks"] = build_supplemental_text_blocks_for_canonical(canonical)
 
     # Evidence parse gate: fail if any parse_status == failed
     parsed_refs = []
