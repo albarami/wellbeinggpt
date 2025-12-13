@@ -245,7 +245,19 @@ class Chunker:
         """Create a single chunk."""
         # Stable chunk id derived from canonical identity + normalized text.
         norm_text = normalize_for_matching(text_ar)
-        basis = f"{entity_type.value}|{entity_id}|{chunk_type.value}|{source_doc_id}|{source_anchor}|{norm_text}"
+        # For evidence chunks, include the reference key in the ID basis.
+        # Reason: Multiple evidence refs can share the same anchor + identical text (e.g., OCR evidence blocks).
+        # Without this, distinct refs can collide into one chunk_id and lose citation granularity.
+        ref_key = ""
+        if chunk_type == ChunkType.EVIDENCE and refs:
+            parts: list[str] = []
+            for r in refs:
+                if isinstance(r, dict) and r.get("type") and r.get("ref"):
+                    parts.append(f"{r['type']}:{r['ref']}")
+            if parts:
+                ref_key = "|" + "|".join(sorted(parts))
+
+        basis = f"{entity_type.value}|{entity_id}|{chunk_type.value}|{source_doc_id}|{source_anchor}|{norm_text}{ref_key}"
         chunk_id = "CH_" + hashlib.sha1(basis.encode("utf-8")).hexdigest()[:12]
 
         return Chunk(

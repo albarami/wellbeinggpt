@@ -129,6 +129,47 @@ class TestChunker:
         chunk_ids = [c.chunk_id for c in chunks]
         assert len(chunk_ids) == len(set(chunk_ids))  # All unique
 
+    def test_evidence_chunk_ids_do_not_collide_on_same_text(self):
+        """
+        Evidence chunks must not collide when the same text+anchor carries different refs.
+
+        This happens when an OCR evidence block is expanded into multiple refs.
+        """
+        canonical = {
+            "meta": {"source_doc_id": "DOC_test"},
+            "pillars": [{
+                "id": "P001",
+                "name_ar": "الحياة الروحية",
+                "core_values": [{
+                    "id": "CV001",
+                    "name_ar": "الإيمان",
+                    "sub_values": [{
+                        "id": "SV001",
+                        "name_ar": "التوحيد",
+                        "evidence": [
+                            {
+                                "evidence_type": "quran",
+                                "ref_raw": "[البقرة: 1]",
+                                "text_ar": "نص واحد",
+                                "source_anchor": "para_9",
+                            },
+                            {
+                                "evidence_type": "quran",
+                                "ref_raw": "[البقرة: 2]",
+                                "text_ar": "نص واحد",
+                                "source_anchor": "para_9",
+                            },
+                        ],
+                    }],
+                }],
+            }],
+        }
+
+        chunker = Chunker()
+        chunks = [c for c in chunker.chunk_canonical_json(canonical) if c.chunk_type == ChunkType.EVIDENCE]
+        assert len(chunks) == 2
+        assert len({c.chunk_id for c in chunks}) == 2
+
     def test_token_estimation(self):
         """Test that token count is estimated."""
         canonical = {
