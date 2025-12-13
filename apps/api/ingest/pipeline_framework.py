@@ -20,6 +20,9 @@ from apps.api.ingest.validator import validate_extraction, validate_evidence_ref
 from apps.api.ingest.canonical_json import extraction_to_canonical_json, save_canonical_json
 from apps.api.ingest.chunker import Chunker
 from apps.api.ingest.supplemental_blocks import build_supplemental_text_blocks_for_canonical
+from apps.api.ingest.supplemental_structure_enforcer import (
+    enforce_social_structure_from_supplemental_tables,
+)
 
 
 @dataclass
@@ -144,6 +147,7 @@ def ingest_framework_docx(
 
     canonical = extraction_to_canonical_json(extracted)
     canonical = _expand_evidence_in_canonical(canonical)
+    canonical = enforce_social_structure_from_supplemental_tables(canonical)
 
     # Persist *everything* the user sent as anchored text blocks (even if not parsed as definition/evidence).
     canonical["supplemental_text_blocks"] = build_supplemental_text_blocks_for_canonical(canonical)

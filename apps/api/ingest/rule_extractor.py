@@ -91,6 +91,9 @@ EVIDENCE_MARKERS = [
     "التأصيل",
     "التأصيل:",
     "التأصيل :",
+    "التفصيل",
+    "التفصيل:",
+    "التفصيل :",
     "الأدلة",
     "الأدلة:",
     "الأدلة :",
@@ -259,6 +262,11 @@ class RuleExtractor:
         # If skeleton detected, we pre-create the 5 pillars here (stable ids) and reuse them.
         self._pillars_by_canonical: dict[str, ExtractedPillar] = {}
 
+        # In skeleton mode, track the authoritative sub-value list per core value (by normalized name).
+        # This is populated from the "القيم الجزئية" table listing and explicit OCR_USER_CONTEXT hints.
+        # Used to prevent drift from later prose headings that resemble value names.
+        self._allowed_subvalues_by_core: dict[str, set[str]] = {}
+
         # Pillar-section sub-values table mode (3-column tables under each pillar)
         self._subvalues_table_mode: bool = False
         self._subvalues_table_core_order: list[ExtractedCoreValue] = []
@@ -292,6 +300,7 @@ class RuleExtractor:
 
         # Finalize any open sections
         self._finalize_current_sections(doc.doc_hash, source_doc)
+        self._apply_allowed_subvalue_filters()
 
         # Calculate totals
         total_cv = sum(len(p.core_values) for p in self.pillars)
@@ -319,6 +328,31 @@ class RuleExtractor:
             total_evidence=total_ev,
         )
 
+    def _apply_allowed_subvalue_filters(self) -> None:
+        """
+        Enforce skeleton-mode sub-value lists (when available).
+
+        Reason:
+        - The framework includes authoritative sub-value tables.
+        - Later prose headings (or OCR artifacts) can look like value names.
+        - We must not let that create/attach new sub-values outside the table.
+        """
+        if not self._skeleton_core_values_by_pillar:
+            return
+        for p in self.pillars:
+            # Limit strict filtering to the social pillar for now.
+            # Reason: social has a clear sub-value table we can trust; other pillars may require
+            # more nuanced handling to avoid dropping valid items.
+            if normalize_for_matching(p.name_ar) != normalize_for_matching("الحياة الاجتماعية"):
+                continue
+            for cv in p.core_values:
+                allowed = self._allowed_subvalues_by_core.get(cv.id)
+                if not allowed:
+                    continue
+                cv.sub_values = [
+                    sv for sv in cv.sub_values if normalize_for_matching(sv.name_ar) in allowed
+                ]
+
     def _process_paragraph(self, para: ParsedParagraph, doc_hash: str, source_doc: str) -> None:
         """Process a single paragraph through the state machine."""
         text = para.text.strip()
@@ -330,6 +364,36 @@ class RuleExtractor:
             return
 
         normalized = normalize_for_matching(text)
+
+        # When inside a sub-value section (or its definition/evidence), avoid treating short
+        # internal labels like "التعارف:" / "التعايش:" (inside "التعارف والتعايش") or
+        # "التكافل:" / "التضامن:" (inside "التكافل والتضامن ...") as *new* sub-values.
+        # But DO allow real new sub-value headings (especially numbered ones like "2. ...").
+        if (
+            self.current_sub_value
+            and self.state
+            in (
+                ExtractorState.IN_SUB_VALUE,
+                ExtractorState.IN_DEFINITION,
+                ExtractorState.IN_EVIDENCE,
+            )
+            and ":" in text
+        ):
+            left = text.split(":", 1)[0].strip()
+            # If the heading is numbered, it's a real new sub-value heading.
+            if re.match(r"^[\d\u0660-\u0669]+", left):
+                pass
+            else:
+                # Treat as nested label only when it's a short component of the current sub-value name.
+                if (
+                    1 < len(left) <= 20
+                    and normalize_for_matching(left)
+                    in normalize_for_matching(self.current_sub_value.name_ar)
+                    and normalize_for_matching(left)
+                    != normalize_for_matching(self.current_sub_value.name_ar)
+                ):
+                    self._continue_current_section(para, doc_hash, source_doc, text)
+                    return
 
         # If we are currently inside a definition block for an active sub-value, and the next line
         # begins with "<sub_value_name>:" (common style), treat it as definition content, not a new heading.
@@ -1193,6 +1257,10 @@ class RuleExtractor:
         # Reject obvious non-entity prose / section lines
         if "\n" in clean_name:
             return
+        if normalize_for_matching(clean_name) in {
+            normalize_for_matching("التفصيل"),
+        }:
+            return
         # Drop citation footnotes / bibliographic lines (heuristic)
         # Reason: Many footnotes start with a number and then bibliographic info.
         # We already stripped list numbering; so only reject if it still looks like a footnote.
@@ -1225,6 +1293,21 @@ class RuleExtractor:
                 # Do not create duplicates; keep existing.
                 return
 
+        # Skeleton mode guardrail:
+        # If we already know the authoritative list (from the pillar sub-values table),
+        # refuse anything outside it unless it comes from an explicit OCR_USER_CONTEXT hint.
+        if (
+            self._skeleton_core_values_by_pillar
+            and self.state != ExtractorState.IN_SUB_VALUES_LIST
+            and self.current_pillar
+            and normalize_for_matching(self.current_pillar.name_ar)
+            == normalize_for_matching("الحياة الاجتماعية")
+        ):
+            allowed = self._allowed_subvalues_by_core.get(self.current_core_value.id)
+            if allowed and n not in allowed and getattr(para, "style", "") != "OCR_USER_CONTEXT":
+                return
+
+        prev_state = self.state
         self.sub_value_counter += 1
         sv_id = f"SV{self.sub_value_counter:03d}"
         sv = ExtractedSubValue(
@@ -1239,6 +1322,21 @@ class RuleExtractor:
         self.current_core_value.sub_values.append(sv)
         self.current_sub_value = sv
         self.state = ExtractorState.IN_SUB_VALUE
+
+        # Track the authoritative list for this core value when created from:
+        # - the official 'القيم الجزئية' table/list
+        # - an explicit OCR_USER_CONTEXT hint (used for user-supplied screenshots)
+        if (
+            self._skeleton_core_values_by_pillar
+            and self.current_pillar
+            and normalize_for_matching(self.current_pillar.name_ar)
+            == normalize_for_matching("الحياة الاجتماعية")
+            and (
+            prev_state == ExtractorState.IN_SUB_VALUES_LIST
+            or getattr(para, "style", "") == "OCR_USER_CONTEXT"
+            )
+        ):
+            self._allowed_subvalues_by_core.setdefault(self.current_core_value.id, set()).add(n)
 
 
     def _clean_value_name(self, text: str) -> str:
@@ -1267,6 +1365,9 @@ class RuleExtractor:
         # Normalize common parenthetical qualifiers used in headings.
         # Example: "التكامل (في الأدوار الاجتماعية)" -> "التكامل في الأدوار الاجتماعية"
         text = text.replace("(في الأدوار الاجتماعية)", "في الأدوار الاجتماعية")
+        # Normalize synonymous "paired value" labels to the canonical "قيمة متلازمة"
+        # Example: "المحاسبة والمساءلة (قيمتان متلازمتان)" -> "المحاسبة والمساءلة (قيمة متلازمة)"
+        text = text.replace("(قيمتان متلازمتان)", "(قيمة متلازمة)")
         # If in the form "NAME: ..." keep NAME only (common in headings, but avoid capturing prose).
         if ":" in text:
             left, right = text.split(":", 1)
