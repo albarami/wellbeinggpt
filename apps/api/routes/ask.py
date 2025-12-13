@@ -141,6 +141,7 @@ async def ask_question(request: AskRequest):
                 pillars=[{"id": r.id, "name_ar": r.name_ar} for r in pillars],
                 core_values=[{"id": r.id, "name_ar": r.name_ar} for r in core_values],
                 sub_values=[{"id": r.id, "name_ar": r.name_ar} for r in sub_values],
+                aliases_path="data/static/aliases_ar.json",
             )
         except Exception:
             # DB may be unavailable in some dev contexts; proceed with empty resolver

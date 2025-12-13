@@ -135,6 +135,8 @@ class HybridRetriever:
         graph_results: list[dict[str, Any]] = []
         vector_results: list[dict[str, Any]] = []
 
+        inferred_entities: list[dict[str, Any]] = []
+
         # 1) Entity-first SQL retrieval
         for ent in inputs.resolved_entities:
             try:
@@ -192,12 +194,72 @@ class HybridRetriever:
             except Exception:
                 vector_results = []
 
+        # 3b) Infer entities from vector hits when explicit entity resolution fails.
+        # Reason: Arabic users often ask via concepts not matching canonical names.
+        # We can still "anchor" to the framework by using the entity_id/type in
+        # the highest scoring chunks, then expand via graph.
+        if not inputs.resolved_entities and vector_results:
+            seen: set[tuple[str, str]] = set()
+            for p in vector_results[: min(8, len(vector_results))]:
+                et = p.get("entity_type")
+                eid = p.get("entity_id")
+                if not et or not eid:
+                    continue
+                key = (str(et), str(eid))
+                if key in seen:
+                    continue
+                seen.add(key)
+                inferred_entities.append(
+                    {
+                        "type": str(et),
+                        "id": str(eid),
+                        "name_ar": None,
+                        "confidence": 0.45,
+                        "match_type": "vector_inferred",
+                    }
+                )
+
         # 4) Ref-driven graph expansion (enterprise cross-pillar discovery)
         # Collect refs from what we already retrieved (SQL + vector) and traverse from 'ref' nodes.
         if self.enable_graph:
             ref_node_ids = self._collect_ref_node_ids(sql_results + vector_results)
             if ref_node_ids:
                 graph_results.extend(await self._expand_via_refs(session, ref_node_ids, depth=2))
+
+            # If we inferred entities from vector, expand from them too.
+            for ent in inferred_entities:
+                try:
+                    et = EntityType(ent["type"])
+                except Exception:
+                    continue
+                neighbors = await expand_graph(
+                    session,
+                    et,
+                    ent["id"],
+                    depth=inputs.graph_depth,
+                    relationship_types=[
+                        "CONTAINS",
+                        "SUPPORTED_BY",
+                        "SHARES_REF",
+                        "MENTIONS_REF",
+                        "REFERS_TO",
+                        "SAME_NAME",
+                    ],
+                )
+                for n in neighbors:
+                    n_type = n.get("neighbor_type")
+                    n_id = n.get("neighbor_id")
+                    if not n_type or not n_id:
+                        continue
+                    try:
+                        n_et = EntityType(n_type)
+                    except Exception:
+                        continue
+                    packets = await get_chunks_with_refs(session, n_et, n_id, limit=6)
+                    for p in packets:
+                        p["depth"] = n.get("depth", 1)
+                        p["via_entity"] = ent["id"]
+                    graph_results.extend(packets)
 
         return self.merge_ranker.merge(
             sql_results=sql_results,
