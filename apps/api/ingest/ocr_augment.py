@@ -18,6 +18,7 @@ from typing import Optional
 
 from apps.api.ingest.docx_reader import ParsedDocument, ParsedParagraph
 from apps.api.ingest.docx_images import extract_images_from_docx_bytes
+from apps.api.ingest.supplemental_ocr import load_supplemental_ocr_paragraphs
 from apps.api.llm.vision_ocr_azure import VisionOcrClient, VisionOcrConfig
 
 
@@ -86,11 +87,21 @@ async def augment_document_with_image_ocr(
     """
     mode = _ocr_mode()
     images = extract_images_from_docx_bytes(docx_bytes)
-    if not images:
+    supplemental = load_supplemental_ocr_paragraphs(doc)
+    if (not images) and (not supplemental):
         return doc, OcrAugmentStats(0, 0, 0, 0)
 
     cfg = VisionOcrConfig.from_env()
     if mode == "off":
+        # Still attach supplemental OCR if present.
+        if supplemental:
+            new_doc = ParsedDocument(
+                doc_name=doc.doc_name,
+                doc_hash=doc.doc_hash,
+                paragraphs=list(doc.paragraphs) + supplemental,
+                total_paragraphs=len(doc.paragraphs) + len(supplemental),
+            )
+            return new_doc, OcrAugmentStats(len(images), 0, 0, 0)
         return doc, OcrAugmentStats(len(images), 0, 0, 0)
 
     if mode == "required" and not cfg.is_configured():
@@ -140,8 +151,8 @@ async def augment_document_with_image_ocr(
     new_doc = ParsedDocument(
         doc_name=doc.doc_name,
         doc_hash=doc.doc_hash,
-        paragraphs=list(doc.paragraphs) + appended,
-        total_paragraphs=len(doc.paragraphs) + len(appended),
+        paragraphs=list(doc.paragraphs) + appended + supplemental,
+        total_paragraphs=len(doc.paragraphs) + len(appended) + len(supplemental),
     )
 
     return new_doc, OcrAugmentStats(

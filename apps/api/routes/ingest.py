@@ -2,9 +2,9 @@
 Ingestion routes for document processing.
 """
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Form
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 from apps.api.core.database import get_session
@@ -16,6 +16,8 @@ from apps.api.ingest.canonical_json import extraction_to_canonical_json
 from apps.api.ingest.pipeline_framework import _expand_evidence_in_canonical
 from apps.api.ingest.chunker import Chunker
 from apps.api.ingest.loader import load_canonical_json_to_db
+from apps.api.ingest.supplemental_ocr import save_supplemental_ocr_text
+from apps.api.llm.vision_ocr_azure import VisionOcrClient, VisionOcrConfig
 
 router = APIRouter()
 
@@ -26,6 +28,8 @@ class IngestionRunResponse(BaseModel):
     run_id: str
     status: str
     source_file_name: str
+    source_doc_id: Optional[str] = None
+    source_file_hash: Optional[str] = None
     created_at: datetime
     message: str
 
@@ -107,8 +111,86 @@ async def ingest_docx(file: UploadFile = File(...)):
         run_id=summary["run_id"],
         status="completed",
         source_file_name=file.filename,
+        source_doc_id=summary.get("source_doc_id"),
+        source_file_hash=canonical.get("meta", {}).get("source_file_hash"),
         created_at=datetime.utcnow(),
         message=f"Ingestion completed. pillars={summary['pillars']} core_values={summary['core_values']} sub_values={summary['sub_values']} chunks={summary.get('chunks',0)} embeddings={summary.get('embeddings',0)}",
+    )
+
+
+class SupplementalImagesResponse(BaseModel):
+    source_file_hash: str
+    images_received: int
+    images_written: int
+    message: str
+
+
+@router.post("/supplemental-images", response_model=SupplementalImagesResponse)
+async def upload_supplemental_images(
+    files: List[UploadFile] = File(...),
+    source_file_hash: Optional[str] = Form(default=None),
+    source_doc_id: Optional[str] = Form(default=None),
+):
+    """
+    Upload supplemental screenshots for OCR ingestion.
+
+    These screenshots are OCR'd and stored (text only) under `data/derived/` (gitignored).
+    Subsequent `/ingest/docx` runs will automatically include them.
+
+    Provide either:
+    - source_file_hash (preferred): sha256 of the DOCX bytes (same as source_document.file_hash)
+    - source_doc_id: UUID of the source_document row (we resolve to file_hash)
+    """
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided.")
+
+    # Resolve source_file_hash from DB if source_doc_id is provided
+    if (not source_file_hash) and source_doc_id:
+        async with get_session() as session:
+            from sqlalchemy import text as sqltext
+
+            row = (
+                await session.execute(
+                    sqltext("SELECT file_hash FROM source_document WHERE id = :id"),
+                    {"id": source_doc_id},
+                )
+            ).fetchone()
+            if row and row.file_hash:
+                source_file_hash = str(row.file_hash)
+
+    if not source_file_hash:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide source_file_hash or source_doc_id.",
+        )
+
+    cfg = VisionOcrConfig.from_env()
+    if not cfg.is_configured():
+        raise HTTPException(status_code=500, detail="Vision OCR is not configured.")
+    client = VisionOcrClient(cfg)
+
+    written = 0
+    for f in files:
+        img_bytes = await f.read()
+        if not img_bytes:
+            continue
+        res = await client.ocr_image(img_bytes)
+        if res.error or not res.text_ar.strip():
+            continue
+        lines = [ln.strip() for ln in res.text_ar.splitlines() if ln.strip()]
+        save_supplemental_ocr_text(
+            source_file_hash=source_file_hash,
+            image_sha256=res.image_sha256,
+            filename=f.filename or "upload.png",
+            lines=lines,
+        )
+        written += 1
+
+    return SupplementalImagesResponse(
+        source_file_hash=source_file_hash,
+        images_received=len(files),
+        images_written=written,
+        message="Supplemental OCR text stored. Re-run /ingest/docx to incorporate into DB/graph/RAG.",
     )
 
 
