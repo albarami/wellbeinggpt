@@ -331,6 +331,53 @@ class RuleExtractor:
 
         normalized = normalize_for_matching(text)
 
+        # Supplemental OCR special-case:
+        # When the user provides screenshots (OCR_USER_IMAGE), the extractor loses natural DOCX ordering.
+        # We allow an inline heading pattern only for these OCR lines to avoid creating spurious entities
+        # from dictionary-style definitions in the real DOCX text.
+        if (
+            getattr(para, "style", "") == "OCR_USER_IMAGE"
+            and self.current_core_value
+            and ":" in text
+            # Only allow this for the FIRST OCR line of a screenshot to avoid
+            # incorrectly creating sub-values from dictionary-style definition lines
+            # like "والبصر: ..." that appear later in the same screenshot.
+            and str(getattr(para, "source_anchor", "")).endswith("_ln0")
+        ):
+            left, right = text.split(":", 1)
+            left_s = left.strip()
+            right_s = right.strip()
+            # Do not treat ordinal labels (e.g., "ثانيا:") as sub-value headings.
+            if re.match(
+                r"^(أولا|أولًا|أولاً|ثانيا|ثانيًا|ثالثا|ثالثًا|رابعا|خامسا|سادسا|سابعا|ثامنا|تاسعا|عاشرا)\b",
+                left_s,
+            ):
+                # Continue normal processing for this paragraph.
+                pass
+            else:
+                if (
+                    left_s
+                    and right_s
+                    and len(left_s) <= 40
+                    and len(left_s.split()) <= 4
+                    and len(right_s) >= 8
+                    and normalize_for_matching(left_s)
+                    not in {
+                        normalize_for_matching("المفهوم"),
+                        normalize_for_matching("التأصيل"),
+                        normalize_for_matching("التعريف"),
+                        normalize_for_matching("الدليل"),
+                    }
+                    and not left_s.startswith(("قال", "وقال", "يقول"))
+                ):
+                    # Treat as a sub-value heading (e.g., "العلم: ...") and continue accumulating definition.
+                    self._finalize_definition_and_evidence()
+                    self._start_sub_value_from_heading(para, doc_hash, source_doc, left_s)
+                    # Immediately start a definition block and add the right-hand side.
+                    self._handle_definition_start(para, doc_hash, source_doc, "المفهوم:")
+                    self._continue_current_section(para, doc_hash, source_doc, right_s)
+                    return
+
         # Check for state transitions based on markers
         if self._is_pillars_list_marker(normalized):
             self._handle_pillars_list()
@@ -365,6 +412,14 @@ class RuleExtractor:
                 self._finalize_definition_and_evidence()
                 self._subvalues_table_mode = False
                 self._start_core_value_from_heading(para, doc_hash, source_doc, candidate)
+                return
+
+        # Important: within an active core value, numbered list items like "4. ..." / "٥. ..."
+        # are almost always sub-values (not new core values). Prefer sub-value detection first.
+        if self.current_core_value and re.match(r"^[\d\u0660-\u0669]", text.strip()):
+            if self._is_sub_value_heading(text):
+                self._finalize_definition_and_evidence()
+                self._start_sub_value_from_heading(para, doc_hash, source_doc, text)
                 return
 
         # Detect core value headings that don't use "القيم الكلية" lists (common in this DOCX)
@@ -564,6 +619,8 @@ class RuleExtractor:
         - "العلم عن الله:"
         - "الإخلاص"
         - "التغذية السليمة"
+        - "4. التجرد / الاستقلالية"
+        - "٥. الاختبار/الامتحان/الابتلاء"
         """
         t = text.strip()
         if not t or len(t) > 80:
@@ -584,16 +641,34 @@ class RuleExtractor:
         }
         if normalize_for_matching(t) in banned:
             return False
+        # Dictionary/source labels are not sub-values (common in definitions).
+        if normalize_for_matching("لسان العرب") in normalize_for_matching(t):
+            return False
+        if normalize_for_matching("معجم") in normalize_for_matching(t) and normalize_for_matching("مادة") in normalize_for_matching(t):
+            return False
         # Exclude verses/hadith lines
-        if t.startswith("﴿") or t.startswith("{") or t.startswith("(") or t.startswith("«"):
+        # Note: allow parenthesized numbering like "(2) ..." which is used for sub-value headings.
+        if t.startswith("﴿") or t.startswith("{") or t.startswith("«"):
+            return False
+        if t.startswith("(") and not re.match(r"^\(\s*[\d\u0660-\u0669]{1,2}\s*\)", t):
             return False
         if t.startswith("قال") or t.startswith("وقال") or t.startswith("يقول") or t.startswith("وفي الحديث"):
             return False
         # Exclude evidence-intro prose that often appears inline
         if "يقول الله تعالى" in t or "قال الله تعالى" in t or t.startswith("وفي"):
             return False
-        # Headings often end with ":" or are short standalone lines
+        # Sub-value headings commonly appear as:
+        # - "NAME:" (colon heading)
+        # - numbered list items: "4. NAME" / "٥) NAME" / "4- NAME"
+        # - parenthesized numbering: "(2) NAME" / "(٢) NAME"
         if t.endswith(":") or t.endswith("："):
+            return True
+        if re.match(r"^[\d\u0660-\u0669]{1,2}\s*[.\-)\u060c:：]\s+\S+", t):
+            return True
+        if re.match(r"^\(\s*[\d\u0660-\u0669]{1,2}\s*\)\s+\S+", t):
+            return True
+        # Bullet/short list items without colon (some DOCX/OCR variants)
+        if self._looks_like_list_item(t) and len(t.split()) <= 6 and ":" not in t:
             return True
         return False
 
@@ -607,6 +682,14 @@ class RuleExtractor:
         n = normalize_for_matching(name)
         for existing in self.current_core_value.sub_values:
             if normalize_for_matching(existing.name_ar) == n:
+                self.current_sub_value = existing
+                self.state = ExtractorState.IN_SUB_VALUE
+                return
+        # Variant mapping: if the heading contains an existing sub-value name (e.g. "سعة الأفق/البصيرة/الفراسة"),
+        # attach to the existing sub-value to avoid duplicates.
+        for existing in self.current_core_value.sub_values:
+            ex_n = normalize_for_matching(existing.name_ar)
+            if ex_n and (ex_n in n or n in ex_n):
                 self.current_sub_value = existing
                 self.state = ExtractorState.IN_SUB_VALUE
                 return
@@ -1123,6 +1206,9 @@ class RuleExtractor:
         if len(text) > 120 and ":" in text:
             # Likely a definition paragraph, not a list item name
             return ""
+
+        # Remove parenthesized numbering like "(2) " / "(٢) " (common in some sub-value headings)
+        text = re.sub(r"^\(\s*[\d\u0660-\u0669]+\s*\)\s*", "", text)
 
         # Remove numbering (Arabic or Western)
         text = re.sub(r"^[\d\u0660-\u0669]+[.\-)\s]+", "", text)

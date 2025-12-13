@@ -183,6 +183,7 @@ async def upload_supplemental_images(
             image_sha256=res.image_sha256,
             filename=f.filename or "upload.png",
             lines=lines,
+            context={},
         )
         written += 1
 

@@ -50,6 +50,7 @@ def save_supplemental_ocr_text(
     image_sha256: str,
     filename: str,
     lines: list[str],
+    context: dict | None = None,
 ) -> Path:
     """
     Save OCR lines for a single screenshot under the source DOCX hash.
@@ -62,6 +63,9 @@ def save_supplemental_ocr_text(
         "image_sha256": image_sha256,
         "filename": filename,
         "lines": [ln for ln in lines if (ln or "").strip()],
+        # Optional context hints to ensure the state machine attaches content correctly.
+        # Example: {"pillar_name_ar": "الحياة الفكرية", "core_value_name_ar": "الحكمة"}
+        "context": context or {},
     }
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return out
@@ -84,8 +88,54 @@ def load_supplemental_ocr_paragraphs(doc: ParsedDocument) -> list[ParsedParagrap
             continue
         img_sha = str(payload.get("image_sha256") or "")
         lines = payload.get("lines") or []
+        ctx = payload.get("context") or {}
+        pillar_name = str(ctx.get("pillar_name_ar") or "").strip()
+        core_value_name = str(ctx.get("core_value_name_ar") or "").strip()
+        sub_value_name = str(ctx.get("sub_value_name_ar") or "").strip()
         if not img_sha or not isinstance(lines, list):
             continue
+        # Inject context marker lines (synthetic) to steer extraction state.
+        # These lines are NOT evidence; they exist only to restore pillar/core-value scope
+        # when supplemental screenshots are appended outside the DOCX flow.
+        if pillar_name:
+            anchor = f"userctx_{img_sha[:12]}_pillar"
+            paras.append(
+                ParsedParagraph(
+                    para_index=base_idx + len(paras),
+                    text=f"الحياة {pillar_name} الطيبة" if not pillar_name.startswith("الحياة") else f"{pillar_name} الطيبة",
+                    style="OCR_USER_CONTEXT",
+                    doc_name=doc.doc_name,
+                    doc_hash=doc.doc_hash,
+                    source_anchor=anchor,
+                    runs=[],
+                )
+            )
+        if core_value_name:
+            anchor = f"userctx_{img_sha[:12]}_core"
+            paras.append(
+                ParsedParagraph(
+                    para_index=base_idx + len(paras),
+                    text=f"2. {core_value_name}",
+                    style="OCR_USER_CONTEXT",
+                    doc_name=doc.doc_name,
+                    doc_hash=doc.doc_hash,
+                    source_anchor=anchor,
+                    runs=[],
+                )
+            )
+        if sub_value_name:
+            anchor = f"userctx_{img_sha[:12]}_sub"
+            paras.append(
+                ParsedParagraph(
+                    para_index=base_idx + len(paras),
+                    text=f"{sub_value_name}:",
+                    style="OCR_USER_CONTEXT",
+                    doc_name=doc.doc_name,
+                    doc_hash=doc.doc_hash,
+                    source_anchor=anchor,
+                    runs=[],
+                )
+            )
         for ln_idx, line in enumerate([str(x).strip() for x in lines if str(x).strip()]):
             anchor = f"userimg_{img_sha[:12]}_ln{ln_idx}"
             paras.append(
