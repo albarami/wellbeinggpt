@@ -97,6 +97,32 @@ def _json_schema_for_interpreter() -> dict[str, Any]:
     }
 
 
+def _json_schema_for_query_rewrite_ar() -> dict[str, Any]:
+    return {
+        "name": "query_rewrite_ar",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "rewrites_ar": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 1,
+                    "maxItems": 5,
+                },
+                "focus_terms_ar": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "minItems": 0,
+                    "maxItems": 8,
+                },
+                "disambiguation_question_ar": {"type": ["string", "null"]},
+            },
+            "required": ["rewrites_ar", "focus_terms_ar", "disambiguation_question_ar"],
+        },
+    }
+
+
 @dataclass
 class PurposePathResult:
     ultimate_goal_ar: str
@@ -188,5 +214,50 @@ class MuhasibiLLMClient:
             )
         except Exception:
             return None
+
+    async def query_rewrite_ar(
+        self,
+        question: str,
+        detected_entities: list[dict[str, Any]],
+        keywords: list[str],
+    ) -> Optional[dict[str, Any]]:
+        """
+        Generate Arabic query rewrites to improve retrieval.
+
+        Safety:
+        - This method must NOT answer the question.
+        - Output is used only to run additional retrieval queries.
+        """
+        system_prompt = _read_prompt("query_rewrite_ar.md")
+        user_payload = {
+            "question": question,
+            "detected_entities": [
+                {"type": e.get("type"), "name_ar": e.get("name_ar"), "confidence": e.get("confidence", 0.0)}
+                for e in (detected_entities or [])[:8]
+            ],
+            "keywords": (keywords or [])[:12],
+        }
+        req = LLMRequest(
+            system_prompt=system_prompt,
+            user_message=json.dumps(user_payload, ensure_ascii=False),
+            response_format=_json_schema_for_query_rewrite_ar(),
+            temperature=0.2,
+            max_tokens=500,
+        )
+        resp = await self.provider.complete(req)
+        if resp.error:
+            return None
+        data = resp.parsed_json
+        if not isinstance(data, dict):
+            try:
+                data = json.loads(resp.content)
+            except Exception:
+                return None
+        if not isinstance(data, dict):
+            return None
+        # Basic structural validation
+        if not isinstance(data.get("rewrites_ar"), list) or not data["rewrites_ar"]:
+            return None
+        return data
 
 

@@ -307,6 +307,43 @@ class MuhasibiMiddleware:
             except Exception as e:
                 ctx.account_issues.append(f"فشل الاسترجاع: {e}")
 
+        # If retrieval is weak, use GPT-5 ONLY to rewrite the query (not to answer),
+        # then run additional non-LLM retrieval attempts.
+        if (not ctx.evidence_packets or len(ctx.evidence_packets) < 3) and self.llm_client and ctx.language == "ar":
+            try:
+                rewrites = await self.llm_client.query_rewrite_ar(
+                    question=ctx.question,
+                    detected_entities=ctx.detected_entities,
+                    keywords=ctx.question_keywords,
+                )
+                if rewrites and self.retriever and hasattr(self.retriever, "_session") and self.retriever._session:
+                    session = self.retriever._session
+                    extra_packets: list[dict[str, Any]] = []
+                    for q in list(rewrites.get("rewrites_ar", []))[:3]:
+                        try:
+                            merge = await self.retriever.retrieve(
+                                session,
+                                RetrievalInputs(
+                                    query=str(q),
+                                    resolved_entities=ctx.detected_entities,
+                                ),
+                            )
+                            extra_packets.extend(merge.evidence_packets)
+                        except Exception:
+                            continue
+
+                    # Merge deterministically: keep existing first, then add new unique chunk_ids.
+                    seen = {p.get("chunk_id") for p in ctx.evidence_packets if p.get("chunk_id")}
+                    for p in extra_packets:
+                        cid = p.get("chunk_id")
+                        if cid and cid not in seen:
+                            ctx.evidence_packets.append(p)
+                            seen.add(cid)
+
+                    ctx.evidence_packets = ctx.evidence_packets[:12]
+            except Exception:
+                pass
+
         # If still empty, keep flags consistent
         ctx.has_definition = len([
             p for p in ctx.evidence_packets
