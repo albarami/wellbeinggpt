@@ -399,19 +399,42 @@ async def load_text_block(
     Returns:
         The text block ID.
     """
-    # Idempotent upsert by natural key (source_doc_id, entity_type, entity_id, block_type).
-    existing_id = await _scalar_one_or_none(
-        session,
-        """
-        SELECT id
-        FROM text_block
-        WHERE source_doc_id = :sd
-          AND entity_type = :et
-          AND entity_id = :eid
-          AND block_type = :bt
-        """,
-        {"sd": source_doc_id, "et": entity_type, "eid": entity_id, "bt": block_type},
-    )
+    # Idempotency:
+    # - For normal blocks, upsert by (source_doc_id, entity_type, entity_id, block_type).
+    # - For supplemental OCR audit blocks, allow MULTIPLE blocks per entity (one per screenshot anchor),
+    #   and dedupe by (source_doc_id, entity_type, entity_id, block_type, source_anchor->>source_anchor).
+    params = {"sd": source_doc_id, "et": entity_type, "eid": entity_id, "bt": block_type}
+    if block_type == "supplemental_ocr":
+        anchor_str = ""
+        if isinstance(source_anchor, dict):
+            anchor_str = str(source_anchor.get("source_anchor") or "")
+        params["a"] = anchor_str
+        existing_id = await _scalar_one_or_none(
+            session,
+            """
+            SELECT id
+            FROM text_block
+            WHERE source_doc_id = :sd
+              AND entity_type = :et
+              AND entity_id = :eid
+              AND block_type = :bt
+              AND (source_anchor->>'source_anchor') = :a
+            """,
+            params,
+        )
+    else:
+        existing_id = await _scalar_one_or_none(
+            session,
+            """
+            SELECT id
+            FROM text_block
+            WHERE source_doc_id = :sd
+              AND entity_type = :et
+              AND entity_id = :eid
+              AND block_type = :bt
+            """,
+            params,
+        )
     if existing_id:
         await session.execute(
             text(

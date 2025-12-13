@@ -331,6 +331,19 @@ class RuleExtractor:
 
         normalized = normalize_for_matching(text)
 
+        # If we are currently inside a definition block for an active sub-value, and the next line
+        # begins with "<sub_value_name>:" (common style), treat it as definition content, not a new heading.
+        # Reason: Avoid prematurely finalizing a definition as ":" and creating duplicate sub-value headings.
+        if (
+            self.state == ExtractorState.IN_DEFINITION
+            and self.current_sub_value
+            and ":" in text
+            and normalize_for_matching(text.split(":", 1)[0].strip())
+            == normalize_for_matching(self.current_sub_value.name_ar)
+        ):
+            self._continue_current_section(para, doc_hash, source_doc, text)
+            return
+
         # Supplemental OCR special-case:
         # When the user provides screenshots (OCR_USER_IMAGE), the extractor loses natural DOCX ordering.
         # We allow an inline heading pattern only for these OCR lines to avoid creating spurious entities
@@ -450,6 +463,13 @@ class RuleExtractor:
                 cand_n = normalize_for_matching(candidate)
                 for sv in self.current_core_value.sub_values:
                     if normalize_for_matching(sv.name_ar) == cand_n:
+                        # If we're in a definition for the current sub-value, do not restart it.
+                        if (
+                            self.state == ExtractorState.IN_DEFINITION
+                            and self.current_sub_value
+                            and normalize_for_matching(self.current_sub_value.name_ar) == cand_n
+                        ):
+                            break
                         self._finalize_definition_and_evidence()
                         self._start_sub_value_from_heading(para, doc_hash, source_doc, candidate)
                         return
@@ -938,6 +958,10 @@ class RuleExtractor:
         clean = text
         for marker in DEFINITION_MARKERS:
             clean = clean.replace(marker, "").strip()
+        # If the marker line is just "المفهوم:" it often leaves a bare ":".
+        # Reason: Do not let placeholder punctuation become the entire definition.
+        if clean.strip() in {":", "："}:
+            clean = ""
 
         self.current_definition_paras = [{
             "raw": raw_line,
@@ -1076,6 +1100,11 @@ class RuleExtractor:
         self, para: ParsedParagraph, doc_hash: str, source_doc: str, text: str
     ) -> None:
         """Try to add a core value from text."""
+        # Reject numbered bibliographic footnotes (common in screenshots and DOCX).
+        # Reason: Footnotes often start with a number and should not create entities.
+        t0 = text.strip()
+        if re.match(r"^\d+\s+.+", t0) and ("(" in t0 and ")" in t0):
+            return
         # Only accept list-like short lines
         if not self._looks_like_list_item(text):
             return
@@ -1126,6 +1155,11 @@ class RuleExtractor:
         self, para: ParsedParagraph, doc_hash: str, source_doc: str, text: str
     ) -> None:
         """Try to add a sub-value from text."""
+        # Reject numbered bibliographic footnotes (common in screenshots and DOCX).
+        # Reason: Footnotes often start with a number and should not create entities.
+        t0 = text.strip()
+        if re.match(r"^\d+\s+.+", t0) and ("(" in t0 and ")" in t0):
+            return
         if not self._looks_like_list_item(text):
             return
 
@@ -1163,6 +1197,13 @@ class RuleExtractor:
         # Reason: Many footnotes start with a number and then bibliographic info.
         # We already stripped list numbering; so only reject if it still looks like a footnote.
         if re.search(r"(دار\s+|بيروت|الطبعة|تحقيق|مكتبة|مجلة|جامعة|عام\s+\d{3,4})", clean_name):
+            return
+        # Reject common bibliographic titles that appear in footnotes and glossaries
+        # (we store them as refs instead of entities).
+        if re.search(r"(المعجم\s+|كشاف\s+|مختار\s+|التوقيف\s+|دستور\s+|اصطلاحات\s+الفنون)", clean_name):
+            return
+        # Reject citation-like volume/page patterns, e.g. "(2/1800)" or "(2/638)"
+        if re.search(r"\(\s*\d+\s*/\s*\d+\s*\)", clean_name):
             return
         if normalize_for_matching(clean_name).startswith(normalize_for_matching("تفسير")):
             return
@@ -1223,6 +1264,9 @@ class RuleExtractor:
         text = " ".join(text.split())
         # Normalize slash separators (OCR/table headings often vary spacing around '/')
         text = re.sub(r"\s*[\/／]\s*", "/", text)
+        # Normalize common parenthetical qualifiers used in headings.
+        # Example: "التكامل (في الأدوار الاجتماعية)" -> "التكامل في الأدوار الاجتماعية"
+        text = text.replace("(في الأدوار الاجتماعية)", "في الأدوار الاجتماعية")
         # If in the form "NAME: ..." keep NAME only (common in headings, but avoid capturing prose).
         if ":" in text:
             left, right = text.split(":", 1)
