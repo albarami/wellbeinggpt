@@ -1,3 +1,9 @@
+# Derived / local artifacts
+data/derived/
+
+# Local scratch scripts (do not commit)
+tmp_*.py
+
 # Python
 __pycache__/
 *.py[cod]
