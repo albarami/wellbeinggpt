@@ -17,7 +17,11 @@ from apps.api.llm.embedding_client_azure import AzureEmbeddingClient, EmbeddingC
 
 
 def _vector_backend() -> str:
-    return os.getenv("VECTOR_BACKEND", "disabled").lower()  # azure_search | disabled
+    # Supported:
+    # - bm25: local BM25 over chunk text (no external services)
+    # - azure_search: Azure AI Search vector index (external)
+    # - disabled
+    return os.getenv("VECTOR_BACKEND", "disabled").lower()
 
 
 async def search_similar_chunks(
@@ -176,6 +180,17 @@ class VectorRetriever:
         backend = _vector_backend()
         if backend == "disabled":
             return []
+
+        if backend in ("bm25", "local_bm25"):
+            from apps.api.retrieve.vector_retriever_bm25 import bm25_search
+
+            return await bm25_search(
+                session=session,
+                query=query,
+                top_k=top_k,
+                entity_types=entity_types,
+                chunk_types=chunk_types,
+            )
 
         if backend == "azure_search":
             from apps.api.retrieve.vector_retriever_azure_search import azure_search_vector_search

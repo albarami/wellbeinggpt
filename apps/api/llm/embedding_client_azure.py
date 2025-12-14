@@ -32,10 +32,10 @@ class EmbeddingConfig:
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", ""),
             azure_api_key=os.getenv("AZURE_OPENAI_API_KEY", ""),
             azure_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-21"),
-            embedding_deployment=os.getenv(
-                "AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME",
-                os.getenv("EMBEDDING_MODEL", "text-embedding-3-large"),
-            ),
+            # IMPORTANT: Azure embeddings require a *deployment name*, not a model family name.
+            # Do not fall back to EMBEDDING_MODEL, because it causes confusing 404 DeploymentNotFound
+            # when users haven't created an embeddings deployment.
+            embedding_deployment=os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME", ""),
             dims=dims,
         )
 

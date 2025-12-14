@@ -34,6 +34,11 @@ def pytest_configure(config):
         
         # Always enable DB tests when .env is loaded
         os.environ.setdefault("RUN_DB_TESTS", "1")
+
+        # If the user has no Azure Search, use local BM25 for "vector" retrieval in tests.
+        # This is not mock data; it ranks real chunks already in Postgres.
+        if os.getenv("VECTOR_BACKEND", "disabled").lower() == "disabled":
+            os.environ["VECTOR_BACKEND"] = "bm25"
         
         print(f"[conftest] DATABASE_URL configured: {bool(os.getenv('DATABASE_URL'))}")
         print(f"[conftest] AZURE_OPENAI_ENDPOINT configured: {bool(os.getenv('AZURE_OPENAI_ENDPOINT'))}")
@@ -100,6 +105,8 @@ def require_azure_search():
         pytest.skip("Requires AZURE_SEARCH_ENDPOINT and AZURE_SEARCH_API_KEY")
     if os.getenv("VECTOR_BACKEND", "disabled").lower() != "azure_search":
         pytest.skip("Requires VECTOR_BACKEND=azure_search")
+    if not os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME"):
+        pytest.skip("Requires AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME")
 
 
 @pytest.fixture

@@ -256,7 +256,7 @@ async def test_cross_pillar_discovery_via_shared_refs(require_db):
 
 
 @pytest.mark.asyncio
-async def test_vector_search_returns_results(require_db, require_azure_search):
+async def test_vector_search_returns_results(require_db):
     """Test that vector search returns results for a known term."""
     from apps.api.core.database import get_session
     from apps.api.retrieve.vector_retriever import VectorRetriever
@@ -279,7 +279,7 @@ async def test_vector_search_returns_results(require_db, require_azure_search):
 
 
 @pytest.mark.asyncio
-async def test_vector_search_definition_in_top_k(require_db, require_azure_search):
+async def test_vector_search_definition_in_top_k(require_db):
     """Test that entity's definition chunk appears in top-K for exact name query."""
     from apps.api.core.database import get_session
     from apps.api.retrieve.vector_retriever import VectorRetriever
