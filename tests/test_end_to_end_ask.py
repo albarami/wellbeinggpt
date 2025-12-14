@@ -207,3 +207,40 @@ class TestEndToEndScenarios:
         assert response.confidence == Confidence.LOW
         assert len(response.citations) == 0
 
+
+class TestMuhasibiReasoningVisibility:
+    """Muḥāsibī reasoning block visibility tests (schema-safe)."""
+
+    @pytest.mark.asyncio
+    async def test_muhasibi_always_includes_reasoning_block_in_answer_ar(self):
+        from apps.api.core.muhasibi_reasoning import REASONING_START, REASONING_END
+
+        middleware = create_middleware()
+        response = await middleware.process("ما هي نظرية الكم في الفيزياء؟")
+
+        assert REASONING_START in response.answer_ar
+        assert REASONING_END in response.answer_ar
+        assert response.answer_ar.strip().startswith(REASONING_START)
+
+    @pytest.mark.asyncio
+    async def test_baseline_does_not_include_reasoning_block(self):
+        from apps.api.core.muhasibi_reasoning import REASONING_START, REASONING_END
+        from apps.api.core.baseline_answer import generate_baseline_answer
+        from apps.api.retrieve.entity_resolver import EntityResolver
+        from apps.api.retrieve.hybrid_retriever import HybridRetriever
+
+        resolver = EntityResolver()
+        resolver.load_entities(pillars=[], core_values=[], sub_values=[])
+        retriever = HybridRetriever()  # no session attached -> not_found response
+
+        response = await generate_baseline_answer(
+            question="ما هي نظرية الكم في الفيزياء؟",
+            retriever=retriever,
+            resolver=resolver,
+            guardrails=None,
+            language="ar",
+        )
+
+        assert REASONING_START not in response.answer_ar
+        assert REASONING_END not in response.answer_ar
+
