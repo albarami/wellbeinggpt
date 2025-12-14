@@ -174,6 +174,41 @@ class TestClaimToEvidenceChecker:
 
         assert result.passed is True
 
+    def test_ignores_muhasibi_reasoning_block_markers(self):
+        """Terms inside the reasoning block should not be claim-checked."""
+        checker = ClaimToEvidenceChecker(min_coverage_ratio=0.8)
+
+        answer = (
+            "[[MUHASIBI_REASONING_START]]\n"
+            "تفكير المحاسبي (عرض منهجي):\n"
+            "- مصطلح_غير_مدعوم\n"
+            "[[MUHASIBI_REASONING_END]]\n"
+            "التقبل هو الاعتراف بالواقع كما هو."
+        )
+        citations = [{"chunk_id": "CH_000001"}]
+        evidence = [{"chunk_id": "CH_000001", "text_ar": "التقبل هو الاعتراف بالواقع كما هو"}]
+
+        result = checker.check(answer, citations, evidence)
+        assert result.passed is True
+
+    def test_still_fails_when_uncovered_terms_outside_reasoning_block(self):
+        """Uncovered terms outside the reasoning block must still fail."""
+        checker = ClaimToEvidenceChecker(min_coverage_ratio=0.8)
+
+        answer = (
+            "[[MUHASIBI_REASONING_START]]\n"
+            "تفكير المحاسبي (عرض منهجي):\n"
+            "- ملاحظة\n"
+            "[[MUHASIBI_REASONING_END]]\n"
+            "مصطلح_غير_مدعوم خارج الكتلة."
+        )
+        citations = [{"chunk_id": "CH_000001"}]
+        evidence = [{"chunk_id": "CH_000001", "text_ar": "نص لا يحتوي على المصطلح"}]
+
+        result = checker.check(answer, citations, evidence)
+        assert result.passed is False
+        assert result.should_retry is True
+
 
 class TestGuardrails:
     """Tests for combined Guardrails."""

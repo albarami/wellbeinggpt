@@ -13,6 +13,34 @@ from typing import Any, Optional
 from apps.api.retrieve.normalize_ar import extract_arabic_words, normalize_for_matching
 
 
+REASONING_START = "[[MUHASIBI_REASONING_START]]"
+REASONING_END = "[[MUHASIBI_REASONING_END]]"
+
+
+def _strip_muhasibi_reasoning_block(text: str) -> str:
+    """
+    Remove Muḥāsibī reasoning metadata block from text.
+
+    Reason: claim-to-evidence checking should evaluate only the *answer* content,
+    not the user-visible methodology explanation block.
+    """
+    if not text:
+        return ""
+
+    out = text
+    # Remove all occurrences deterministically (non-regex, bounded).
+    for _ in range(3):  # hard cap to avoid pathological input
+        start = out.find(REASONING_START)
+        if start < 0:
+            break
+        end = out.find(REASONING_END, start)
+        if end < 0:
+            break
+        end = end + len(REASONING_END)
+        out = (out[:start] + out[end:]).strip()
+    return out
+
+
 @dataclass
 class GuardrailResult:
     """Result of a guardrail check."""
@@ -167,8 +195,11 @@ class ClaimToEvidenceChecker:
         """
         issues = []
 
+        # Ignore the Muḥāsibī reasoning block if present.
+        answer_for_check = _strip_muhasibi_reasoning_block(answer_ar or "")
+
         # Extract key terms from answer
-        answer_terms = extract_arabic_words(answer_ar)
+        answer_terms = extract_arabic_words(answer_for_check)
         answer_terms = [t for t in answer_terms if len(t) >= self.min_term_length]
 
         if not answer_terms:
