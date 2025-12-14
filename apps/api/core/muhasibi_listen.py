@@ -17,6 +17,32 @@ def _is_pillar_list_intent(normalized_question: str) -> bool:
     return ("ركائز" in q or "اركان" in q) and ("الخمس" in q or "خمسة" in q or "5" in q)
 
 
+def _detect_out_of_scope_ar(normalized_question: str) -> tuple[bool, str]:
+    """
+    Detect out-of-scope questions deterministically (Arabic-first).
+
+    This system is scoped to the wellbeing framework content (pillars/values/evidence within the corpus).
+    Questions about medicine/drugs, specific fiqh rulings, authorship, etc. are out of scope.
+    """
+    q = normalized_question or ""
+
+    # Medical / drug questions
+    if ("فوائد" in q and "طبي" in q) or ("دواء" in q) or ("ادوية" in q) or ("علاج" in q):
+        return True, "سؤال طبي/دوائي خارج نطاق الإطار"
+    if "باراسيتامول" in q or "paracetamol" in q or "acetaminophen" in q:
+        return True, "سؤال طبي/دوائي خارج نطاق الإطار"
+
+    # Specific fiqh ruling questions (not values framework)
+    if ("ما حكم" in q or "الحكم الشرعي" in q or "هل يجوز" in q or "حرمة" in q or "حلال" in q or "حرام" in q):
+        return True, "سؤال فقهي/إفتائي خارج نطاق الإطار"
+
+    # Authorship / biography / external facts
+    if "من هو مؤلف" in q or "من مؤلف" in q:
+        return True, "سؤال معلومات خارج نطاق الإطار"
+
+    return False, ""
+
+
 async def run_listen(self, ctx) -> None:
     """
     Populate ctx for LISTEN:
@@ -28,6 +54,23 @@ async def run_listen(self, ctx) -> None:
     """
     ctx.normalized_question = normalize_for_matching(ctx.question)
     ctx.question_keywords = extract_arabic_words(ctx.question)
+
+    # Deterministic out-of-scope refusal (fail closed).
+    oos, reason = _detect_out_of_scope_ar(ctx.normalized_question)
+    if oos:
+        ctx.not_found = True
+        ctx.intent = {
+            "intent_type": "out_of_scope",
+            "is_in_scope": False,
+            "confidence": 0.95,
+            "target_entity_type": None,
+            "target_entity_name_ar": None,
+            "notes_ar": reason,
+            "suggested_queries_ar": [],
+            "required_clarification_question_ar": None,
+        }
+        ctx.listen_summary_ar = f"خارج النطاق: {reason}"
+        return
 
     # Entity resolution
     if self.entity_resolver:

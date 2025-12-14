@@ -13,6 +13,8 @@
 | ID | Task | Status | Date Started | Date Completed |
 |----|------|--------|--------------|----------------|
 | D1-1 | Ingest missing sections from image-based pages (OCR from DOCX media) and re-run ingestion | ✅ Complete | 2025-12-12 | 2025-12-13 |
+| D1-2 | Replace Azure Search dependency with local BM25 vector retrieval (no external services) and update tests to run with no skips | ✅ Complete | 2025-12-14 | 2025-12-14 |
+| D1-3 | Generate proof artifacts (coverage/vector/graph/ask/A-B) and add local embeddings (no Azure) so coverage is fully provable | ✅ Complete | 2025-12-14 | 2025-12-14 |
 
 ---
 

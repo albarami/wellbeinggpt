@@ -82,6 +82,16 @@ def apply_question_evidence_relevance_gate(ctx) -> None:
     except Exception:
         pass
 
+    # If we have any detected framework entities, do NOT apply lexical relevance gating.
+    # Reason: retrieval is already anchored to in-corpus entities; lexical mismatch would
+    # create false refusals for valid guidance questions (e.g., balancing work/rest).
+    try:
+        det = getattr(ctx, "detected_entities", None) or []
+        if len(det) > 0:
+            return
+    except Exception:
+        pass
+
     # Heuristic fallback: if user explicitly asked for listing pillars (ركائز/الخمس) and
     # we already detected the 5 pillars, skip relevance gating.
     try:
