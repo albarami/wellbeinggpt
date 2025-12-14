@@ -521,7 +521,15 @@ async def load_evidence(
     Returns:
         The evidence ID.
     """
-    # Idempotent dedupe by (source_doc_id, entity, evidence_type, ref_norm/ref_raw, text_ar hash).
+    # Idempotent dedupe by (source_doc_id, entity, evidence_type, ref_norm/ref_raw, text_ar hash, source_anchor).
+    # Reason: the same verse/hadith can appear multiple times in the DOCX under the same entity,
+    # and we must preserve each anchored occurrence for auditability.
+    anchor_str = ""
+    try:
+        if isinstance(source_anchor, dict):
+            anchor_str = str(source_anchor.get("source_anchor") or "")
+    except Exception:
+        anchor_str = ""
     existing_id = await _scalar_one_or_none(
         session,
         """
@@ -533,6 +541,7 @@ async def load_evidence(
           AND evidence_type = :ev
           AND COALESCE(ref_norm,'') = COALESCE(:ref_norm,'')
           AND md5(text_ar) = md5(:text_ar)
+          AND (source_anchor->>'source_anchor') = :a
         """,
         {
             "sd": source_doc_id,
@@ -541,6 +550,7 @@ async def load_evidence(
             "ev": evidence_type,
             "ref_norm": ref_norm or "",
             "text_ar": text_ar,
+            "a": anchor_str,
         },
     )
     if existing_id:
@@ -672,6 +682,32 @@ async def load_canonical_json_to_db(
                 await session.execute(text(stmt), {"sd": source_doc_id})
             except Exception:
                 continue
+
+        # Cleanup: remove orphan edges left from prior ingestions with different IDs.
+        # Reason: purge-by-source_doc_id cannot find edges whose IDs no longer exist in the current doc.
+        try:
+            await session.execute(
+                text(
+                    """
+                    DELETE FROM edge e
+                    WHERE e.status = 'approved'
+                      AND (
+                        (e.from_type='pillar' AND NOT EXISTS (SELECT 1 FROM pillar p WHERE p.id=e.from_id)) OR
+                        (e.from_type='core_value' AND NOT EXISTS (SELECT 1 FROM core_value cv WHERE cv.id=e.from_id)) OR
+                        (e.from_type='sub_value' AND NOT EXISTS (SELECT 1 FROM sub_value sv WHERE sv.id=e.from_id)) OR
+                        (e.from_type='chunk' AND NOT EXISTS (SELECT 1 FROM chunk ch WHERE ch.chunk_id=e.from_id)) OR
+                        (e.from_type='evidence' AND NOT EXISTS (SELECT 1 FROM evidence ev WHERE ev.id::text=e.from_id)) OR
+                        (e.to_type='pillar' AND NOT EXISTS (SELECT 1 FROM pillar p2 WHERE p2.id=e.to_id)) OR
+                        (e.to_type='core_value' AND NOT EXISTS (SELECT 1 FROM core_value cv2 WHERE cv2.id=e.to_id)) OR
+                        (e.to_type='sub_value' AND NOT EXISTS (SELECT 1 FROM sub_value sv2 WHERE sv2.id=e.to_id)) OR
+                        (e.to_type='chunk' AND NOT EXISTS (SELECT 1 FROM chunk ch2 WHERE ch2.chunk_id=e.to_id)) OR
+                        (e.to_type='evidence' AND NOT EXISTS (SELECT 1 FROM evidence ev2 WHERE ev2.id::text=e.to_id))
+                      )
+                    """
+                )
+            )
+        except Exception:
+            pass
 
     # Load pillars and their contents
     pillars = canonical_data.get("pillars", [])
