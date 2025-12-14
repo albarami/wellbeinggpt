@@ -49,6 +49,9 @@ class EntityResolver:
         # Optional alias index (normalized alias -> id)
         self._aliases: dict[str, str] = {}
 
+        # Keep original pillar list for "structure intent" (list all pillars)
+        self._pillar_items: list[dict[str, str]] = []
+
     def load_entities(
         self,
         pillars: list[dict],
@@ -69,6 +72,7 @@ class EntityResolver:
         self._sub_values = {}
         self._names = {}
         self._aliases = {}
+        self._pillar_items = []
 
         for p in pillars:
             normalized = normalize_for_matching(p["name_ar"])
@@ -76,6 +80,7 @@ class EntityResolver:
             for v in phrase_variants(p["name_ar"]):
                 self._pillars.setdefault(v, p["id"])
             self._names[p["id"]] = p["name_ar"]
+            self._pillar_items.append({"id": p["id"], "name_ar": p["name_ar"]})
 
         for cv in core_values:
             normalized = normalize_for_matching(cv["name_ar"])
@@ -273,6 +278,10 @@ class EntityResolver:
     def get_entity_name(self, entity_id: str) -> Optional[str]:
         """Get the original Arabic name for an entity ID."""
         return self._names.get(entity_id)
+
+    def list_pillars(self) -> list[dict[str, str]]:
+        """Return pillars as [{id,name_ar}] in original form."""
+        return list(self._pillar_items)
 
 
 # Singleton resolver instance

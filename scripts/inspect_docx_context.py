@@ -12,16 +12,21 @@ from apps.api.ingest.docx_reader import DocxReader
 
 
 def main() -> None:
-    keyword = sys.argv[1] if len(sys.argv) > 1 else "الإيمان"
+    arg = sys.argv[1] if len(sys.argv) > 1 else ""
+    # Allow passing a paragraph index to avoid shell encoding issues with Arabic.
+    keyword = arg or "الإيمان"
     doc = DocxReader().read("docs/source/framework_2025-10_v1.docx")
 
-    hits = []
-    for p in doc.paragraphs:
-        t = (p.text or "").strip()
-        if keyword in t and len(t) <= 80:
-            hits.append(p.para_index)
-            if len(hits) >= 5:
-                break
+    hits: list[int] = []
+    if keyword.isdigit():
+        hits = [int(keyword)]
+    else:
+        for p in doc.paragraphs:
+            t = (p.text or "").strip()
+            if keyword in t and len(t) <= 80:
+                hits.append(p.para_index)
+                if len(hits) >= 5:
+                    break
 
     if not hits:
         print("No hits for:", keyword)

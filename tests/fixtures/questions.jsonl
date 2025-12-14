@@ -1,0 +1,17 @@
+{"id": "c1-01", "category": "factual_structure", "question_ar": "اذكر ركائز الحياة الطيبة الخمس.", "expected": {"not_found": false, "require_citations": true, "min_citations": 1}}
+{"id": "c1-02", "category": "factual_structure", "question_ar": "ما القيم الكلية في الركيزة الروحية الطيبة؟", "expected": {"not_found": false, "require_citations": true, "min_citations": 1}}
+{"id": "c1-03", "category": "factual_structure", "question_ar": "ما القيم الكلية في الحياة الاجتماعية الطيبة؟", "expected": {"not_found": false, "require_citations": true, "min_citations": 1}}
+{"id": "c2-01", "category": "definition_evidence", "question_ar": "عرّف التوحيد واذكر التأصيل.", "expected": {"not_found": false, "require_citations": true, "min_citations": 1, "expect_terms": ["التوحيد"]}}
+{"id": "c2-02", "category": "definition_evidence", "question_ar": "عرّف الصبر كما ورد في الإطار واذكر آية آل عمران:200.", "expected": {"not_found": false, "require_citations": true, "min_citations": 1, "expect_terms": ["الصبر"]}}
+{"id": "c2-03", "category": "definition_evidence", "question_ar": "عرّف إدراك المشاعر واذكر مثالًا من التأصيل.", "expected": {"not_found": false, "require_citations": true, "min_citations": 1}}
+{"id": "c2-04", "category": "definition_evidence", "question_ar": "عرّف التفكير النقدي واذكر آية الحجرات:6.", "expected": {"not_found": false, "require_citations": true, "min_citations": 1}}
+{"id": "c2-05", "category": "definition_evidence", "question_ar": "عرّف التغذية السليمة واذكر آية الأعراف:31.", "expected": {"not_found": false, "require_citations": true, "min_citations": 1}}
+{"id": "c2-06", "category": "definition_evidence", "question_ar": "عرّف التعاطف واذكر مثالًا من التأصيل.", "expected": {"not_found": false, "require_citations": true, "min_citations": 1}}
+{"id": "c3-01", "category": "cross_pillar", "question_ar": "اربط بين التوكل والتوازن العاطفي: أين ورد التوكل؟ وأين ورد التوازن؟", "expected": {"not_found": false, "require_citations": true, "min_citations": 2}}
+{"id": "c3-02", "category": "cross_pillar", "question_ar": "كيف يرتبط الصبر بالتوازن العاطفي وبالإنتاجية؟ أعطني شواهد من النص.", "expected": {"not_found": false, "require_citations": true, "min_citations": 2}}
+{"id": "c3-03", "category": "cross_pillar", "question_ar": "ما العلاقة بين ضبط الانفعالات وكظم الغيظ؟", "expected": {"not_found": false, "require_citations": true, "min_citations": 1}}
+{"id": "c3-04", "category": "cross_pillar", "question_ar": "اربط بين التقويم الذاتي والمحاسبة والمساءلة.", "expected": {"not_found": false, "require_citations": true, "min_citations": 1}}
+{"id": "c5-01", "category": "out_of_scope", "question_ar": "ما حكم صيام يوم الجمعة منفردًا؟", "expected": {"not_found": true, "require_citations": false}}
+{"id": "c5-02", "category": "out_of_scope", "question_ar": "اذكر فوائد طبية لدواء الباراسيتامول.", "expected": {"not_found": true, "require_citations": false}}
+{"id": "c5-03", "category": "out_of_scope", "question_ar": "من هو مؤلف كتاب الرسالة؟", "expected": {"not_found": true, "require_citations": false}}
+{"id": "c5-04", "category": "out_of_scope", "question_ar": "اعطني دليل شرعي على حرمة التدخين.", "expected": {"not_found": true, "require_citations": false}}

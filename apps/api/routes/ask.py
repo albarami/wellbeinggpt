@@ -19,6 +19,42 @@ from apps.api.retrieve.hybrid_retriever import HybridRetriever
 
 router = APIRouter()
 
+def _fail_closed_if_invalid(final: FinalResponse) -> FinalResponse:
+    """
+    Fail closed for enterprise safety.
+
+    Reason: If LLM misbehaves (no citations / empty answer) we must refuse.
+    This is a last-resort safety net in addition to guardrails.
+    """
+    try:
+        if (not final.not_found) and (not getattr(final, "citations", None) or len(final.citations) == 0):
+            return FinalResponse(
+                listen_summary_ar=final.listen_summary_ar,
+                purpose=final.purpose,
+                path_plan_ar=final.path_plan_ar,
+                answer_ar="لا يوجد في البيانات الحالية ما يدعم الإجابة على هذا السؤال.",
+                citations=[],
+                entities=[],
+                difficulty=final.difficulty,
+                not_found=True,
+                confidence="low",  # type: ignore[arg-type]
+            )
+        if (not final.not_found) and (not (final.answer_ar or "").strip()):
+            return FinalResponse(
+                listen_summary_ar=final.listen_summary_ar,
+                purpose=final.purpose,
+                path_plan_ar=final.path_plan_ar,
+                answer_ar="لا يوجد في البيانات الحالية ما يدعم الإجابة على هذا السؤال.",
+                citations=[],
+                entities=[],
+                difficulty=final.difficulty,
+                not_found=True,
+                confidence="low",  # type: ignore[arg-type]
+            )
+    except Exception:
+        pass
+    return final
+
 
 class AskRequest(BaseModel):
     """Request model for asking a question."""
@@ -33,6 +69,36 @@ class AskRequest(BaseModel):
         default="muhasibi",
         description="muhasibi|baseline - reasoning engine to use",
     )
+
+
+class TraceEvent(BaseModel):
+    """Safe Muḥāsibī trace event (no chain-of-thought)."""
+
+    state: str
+    elapsed_s: float
+    mode: str
+    language: str
+    # optional state metadata
+    detected_entities_count: Optional[int] = None
+    keywords_count: Optional[int] = None
+    listen_summary_ar: Optional[str] = None
+    ultimate_goal_ar: Optional[str] = None
+    constraints_count: Optional[int] = None
+    path_steps: Optional[list[str]] = None
+    evidence_packets_count: Optional[int] = None
+    has_definition: Optional[bool] = None
+    has_evidence: Optional[bool] = None
+    not_found: Optional[bool] = None
+    issues: Optional[list[str]] = None
+    confidence: Optional[str] = None
+    citations_count: Optional[int] = None
+    reflection_added: Optional[bool] = None
+    done: Optional[bool] = None
+
+
+class AskTraceResponse(BaseModel):
+    final_response: FinalResponse
+    trace: list[TraceEvent]
 
 
 class Citation(BaseModel):
@@ -149,9 +215,9 @@ async def ask_question(request: AskRequest):
             core_values = (await session.execute(text("SELECT id, name_ar FROM core_value"))).fetchall()
             sub_values = (await session.execute(text("SELECT id, name_ar FROM sub_value"))).fetchall()
             resolver.load_entities(
-                pillars=[{"id": r.id, "name_ar": r.name_ar} for r in pillars],
-                core_values=[{"id": r.id, "name_ar": r.name_ar} for r in core_values],
-                sub_values=[{"id": r.id, "name_ar": r.name_ar} for r in sub_values],
+                pillars=[{"id": str(r.id), "name_ar": r.name_ar} for r in pillars],
+                core_values=[{"id": str(r.id), "name_ar": r.name_ar} for r in core_values],
+                sub_values=[{"id": str(r.id), "name_ar": r.name_ar} for r in sub_values],
                 aliases_path="data/static/aliases_ar.json",
             )
         except Exception:
@@ -166,15 +232,82 @@ async def ask_question(request: AskRequest):
 
         # Use baseline mode if requested
         if request.engine == "baseline":
-            return await generate_baseline_answer(
+            final = await generate_baseline_answer(
                 question=request.question,
                 retriever=retriever,
                 resolver=resolver,
                 guardrails=guardrails,
                 language=request.language,
             )
+            return _fail_closed_if_invalid(final)
 
         # Default: Muhasibi mode
+        llm_client = None
+        try:
+            cfg = ProviderConfig.from_env()
+            import logging
+            logging.getLogger(__name__).info(f"[ASK] LLM configured: {cfg.is_configured()}, endpoint: {cfg.endpoint[:50] if cfg.endpoint else 'None'}")
+            if cfg.is_configured():
+                provider = create_provider(cfg)
+                llm_client = MuhasibiLLMClient(provider)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"[ASK] LLM setup failed: {e}")
+            llm_client = None
+
+        middleware = create_middleware(
+            entity_resolver=resolver,
+            retriever=retriever,
+            llm_client=llm_client,  # uses Azure/OpenAI if configured; else deterministic fallback
+            guardrails=guardrails,
+        )
+
+        final = await middleware.process(request.question, language=request.language, mode=request.mode)
+        
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[ASK] Before fail_closed: not_found={final.not_found}, citations={len(final.citations)}, answer_len={len(final.answer_ar)}")
+        
+        return _fail_closed_if_invalid(final)
+
+
+@router.post("/ask/trace", response_model=AskTraceResponse)
+async def ask_question_with_trace(request: AskRequest):
+    """
+    Ask a question and return a safe Muḥāsibī trace (state flow + timings).
+    """
+    from apps.api.core.baseline_answer import generate_baseline_answer
+
+    async with get_session() as session:
+        resolver = EntityResolver()
+        try:
+            pillars = (await session.execute(text("SELECT id, name_ar FROM pillar"))).fetchall()
+            core_values = (await session.execute(text("SELECT id, name_ar FROM core_value"))).fetchall()
+            sub_values = (await session.execute(text("SELECT id, name_ar FROM sub_value"))).fetchall()
+            resolver.load_entities(
+                pillars=[{"id": str(r.id), "name_ar": r.name_ar} for r in pillars],
+                core_values=[{"id": str(r.id), "name_ar": r.name_ar} for r in core_values],
+                sub_values=[{"id": str(r.id), "name_ar": r.name_ar} for r in sub_values],
+                aliases_path="data/static/aliases_ar.json",
+            )
+        except Exception:
+            pass
+
+        guardrails = Guardrails()
+        retriever = HybridRetriever()
+        retriever._session = session  # type: ignore[attr-defined]
+
+        if request.engine == "baseline":
+            final = await generate_baseline_answer(
+                question=request.question,
+                retriever=retriever,
+                resolver=resolver,
+                guardrails=guardrails,
+                language=request.language,
+            )
+            final = _fail_closed_if_invalid(final)
+            return AskTraceResponse(final_response=final, trace=[])
+
         llm_client = None
         try:
             cfg = ProviderConfig.from_env()
@@ -187,11 +320,15 @@ async def ask_question(request: AskRequest):
         middleware = create_middleware(
             entity_resolver=resolver,
             retriever=retriever,
-            llm_client=llm_client,  # uses Azure/OpenAI if configured; else deterministic fallback
+            llm_client=llm_client,
             guardrails=guardrails,
         )
 
-        return await middleware.process(request.question, language=request.language, mode=request.mode)
+        final, trace = await middleware.process_with_trace(
+            request.question, language=request.language, mode=request.mode
+        )
+        final = _fail_closed_if_invalid(final)
+        return AskTraceResponse(final_response=final, trace=[TraceEvent(**t) for t in trace])
 
 
 @router.post("/search/vector", response_model=SearchResponse)

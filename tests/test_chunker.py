@@ -41,10 +41,10 @@ class TestChunker:
         chunker = Chunker()
         chunks = chunker.chunk_canonical_json(canonical)
 
-        assert len(chunks) == 1
-        assert chunks[0].entity_type == EntityType.PILLAR
-        assert chunks[0].entity_id == "P001"
-        assert chunks[0].chunk_type == ChunkType.DEFINITION
+        # We always produce a pillar-name chunk; description chunk is additional.
+        assert len(chunks) >= 1
+        assert any(c.entity_type == EntityType.PILLAR and c.entity_id == "P001" for c in chunks)
+        assert any("الركيزة:" in c.text_ar for c in chunks)
 
     def test_chunk_core_value_definition(self):
         """Test that core value definitions are chunked."""
@@ -68,10 +68,10 @@ class TestChunker:
         chunker = Chunker()
         chunks = chunker.chunk_canonical_json(canonical)
 
-        assert len(chunks) == 1
-        assert chunks[0].entity_type == EntityType.CORE_VALUE
-        assert chunks[0].entity_id == "CV001"
-        assert "تعريف الإيمان" in chunks[0].text_ar
+        # At least one core-value definition chunk should exist (pillar-name chunk may also exist).
+        core_chunks = [c for c in chunks if c.entity_type == EntityType.CORE_VALUE and c.entity_id == "CV001"]
+        assert len(core_chunks) >= 1
+        assert any("تعريف الإيمان" in c.text_ar for c in core_chunks)
 
     def test_chunk_sub_value_definition(self):
         """Test that sub-value definitions are chunked."""
@@ -98,9 +98,9 @@ class TestChunker:
         chunker = Chunker()
         chunks = chunker.chunk_canonical_json(canonical)
 
-        assert len(chunks) == 1
-        assert chunks[0].entity_type == EntityType.SUB_VALUE
-        assert chunks[0].entity_id == "SV001"
+        sv_chunks = [c for c in chunks if c.entity_type == EntityType.SUB_VALUE and c.entity_id == "SV001"]
+        assert len(sv_chunks) >= 1
+        assert any("التوحيد هو" in c.text_ar for c in sv_chunks)
 
     def test_chunk_ids_are_unique(self):
         """Test that generated chunk IDs are unique."""
@@ -185,9 +185,11 @@ class TestChunker:
         chunker = Chunker()
         chunks = chunker.chunk_canonical_json(canonical)
 
-        assert chunks[0].token_count_estimate > 0
-        # 5 words * 1.5 = 7.5, rounded to 7
-        assert chunks[0].token_count_estimate >= 5
+        assert all(c.token_count_estimate > 0 for c in chunks)
+        # Ensure the description chunk (5 words) has a reasonable estimate
+        desc = next((c for c in chunks if c.text_ar == "كلمة كلمة كلمة كلمة كلمة"), None)
+        assert desc is not None
+        assert desc.token_count_estimate >= 5
 
     def test_long_text_is_split(self):
         """Test that long definition text is split into multiple chunks."""
@@ -290,8 +292,10 @@ class TestChunkerEdgeCases:
         chunker = Chunker()
         chunks = chunker.chunk_canonical_json(canonical)
 
-        # Should not create chunk for empty text
-        assert len(chunks) == 0
+        # Pillar-name chunk exists; core_value heading chunk may exist,
+        # but an empty definition body must not produce an empty-text chunk.
+        assert any(c.entity_type == EntityType.PILLAR for c in chunks)
+        assert not any((c.entity_type == EntityType.CORE_VALUE) and (not (c.text_ar or "").strip()) for c in chunks)
 
     def test_missing_definition(self):
         """Test handling of missing definition."""
@@ -312,7 +316,8 @@ class TestChunkerEdgeCases:
         chunker = Chunker()
         chunks = chunker.chunk_canonical_json(canonical)
 
-        assert len(chunks) == 0
+        assert any(c.entity_type == EntityType.PILLAR for c in chunks)
+        assert not any((c.entity_type == EntityType.CORE_VALUE) and (not (c.text_ar or "").strip()) for c in chunks)
 
     def test_missing_source_anchor(self):
         """Test handling of missing source anchor."""
@@ -331,6 +336,5 @@ class TestChunkerEdgeCases:
         chunks = chunker.chunk_canonical_json(canonical)
 
         # Should still create chunk with "unknown" anchor
-        assert len(chunks) == 1
-        assert chunks[0].source_anchor == "unknown"
+        assert any(c.source_anchor == "unknown" for c in chunks)
 

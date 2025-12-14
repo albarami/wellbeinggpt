@@ -28,7 +28,8 @@ class TestProviderConfig:
         with patch.dict(os.environ, {}, clear=True):
             config = ProviderConfig.from_env()
 
-            assert config.provider_type == ProviderType.AZURE_RESPONSES
+            # Default provider is azure_chat (supports response_format with JSON schema broadly)
+            assert config.provider_type == ProviderType.AZURE_CHAT
             assert config.api_version == "2024-10-21"
             assert config.max_tokens == 4096
             assert config.temperature == 0.0

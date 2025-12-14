@@ -81,6 +81,7 @@ If evidence is insufficient:
     "entity_id": "CV001",
     "chunk_type": "definition",
     "text_ar": "الإيمان هو التصديق بالقلب والإقرار باللسان والعمل بالأركان",
+    "source_anchor": "para_50",
     "refs": []
   }
 ]
@@ -93,7 +94,7 @@ If evidence is insufficient:
   "citations": [
     {
       "chunk_id": "CH_000001",
-      "source_anchor": "",
+      "source_anchor": "para_50",
       "ref": null
     }
   ],
@@ -108,4 +109,3 @@ If evidence is insufficient:
   "confidence": "high"
 }
 ```
-

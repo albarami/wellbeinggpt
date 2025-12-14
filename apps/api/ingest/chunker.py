@@ -93,6 +93,22 @@ class Chunker:
         chunks = []
         pillar_id = pillar_data["id"]
 
+        # Always create a citeable chunk for the pillar heading (name).
+        # Reason: supports structure questions like "اذكر ركائز الحياة الطيبة الخمس"
+        # with direct citations to each pillar heading anchor.
+        name_ar = (pillar_data.get("name_ar") or "").strip()
+        if name_ar:
+            chunks.append(
+                self._create_chunk(
+                    entity_type=EntityType.PILLAR,
+                    entity_id=pillar_id,
+                    chunk_type=ChunkType.DEFINITION,
+                    text_ar=f"الركيزة: {name_ar}",
+                    source_doc_id=source_doc_id,
+                    source_anchor=self._get_anchor_str(pillar_data.get("source_anchor")),
+                )
+            )
+
         # Chunk pillar description if present
         if pillar_data.get("description_ar"):
             chunk = self._create_chunk(
@@ -119,6 +135,22 @@ class Chunker:
         """Create chunks from a core value."""
         chunks = []
         cv_id = cv_data["id"]
+
+        # Always create a citeable chunk for the core value heading (name).
+        # Reason: some core values do not have an explicit "المفهوم" paragraph, but their names
+        # are still authoritative and must be citeable for structure questions.
+        cv_heading = (cv_data.get("raw_text") or cv_data.get("name_ar") or "").strip()
+        if cv_heading:
+            chunks.append(
+                self._create_chunk(
+                    entity_type=EntityType.CORE_VALUE,
+                    entity_id=cv_id,
+                    chunk_type=ChunkType.DEFINITION,
+                    text_ar=f"القيمة الكلية: {cv_heading}",
+                    source_doc_id=source_doc_id,
+                    source_anchor=self._get_anchor_str(cv_data.get("source_anchor")),
+                )
+            )
 
         # Chunk definition
         if cv_data.get("definition") and cv_data["definition"].get("text_ar"):
@@ -165,6 +197,22 @@ class Chunker:
         """Create chunks from a sub-value."""
         chunks = []
         sv_id = sv_data["id"]
+
+        # Always create a citeable chunk for the sub-value heading (name).
+        # Reason: some sub-values may not have a formal "المفهوم" block, but their names
+        # still appear as table/list headings and must be citeable.
+        sv_heading = (sv_data.get("raw_text") or sv_data.get("name_ar") or "").strip()
+        if sv_heading:
+            chunks.append(
+                self._create_chunk(
+                    entity_type=EntityType.SUB_VALUE,
+                    entity_id=sv_id,
+                    chunk_type=ChunkType.DEFINITION,
+                    text_ar=f"القيمة الجزئية: {sv_heading}",
+                    source_doc_id=source_doc_id,
+                    source_anchor=self._get_anchor_str(sv_data.get("source_anchor")),
+                )
+            )
 
         # Chunk definition
         if sv_data.get("definition") and sv_data["definition"].get("text_ar"):

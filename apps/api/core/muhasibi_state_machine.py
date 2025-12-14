@@ -29,6 +29,10 @@ from apps.api.core.schemas import (
 from apps.api.retrieve.normalize_ar import normalize_for_matching, extract_arabic_words
 from apps.api.retrieve.hybrid_retriever import HybridRetriever, RetrievalInputs
 from apps.api.llm.muhasibi_llm_client import MuhasibiLLMClient
+from apps.api.core.muhasibi_interpret import run_interpret, run_reflect, build_final_response
+from apps.api.core.muhasibi_trace import summarize_state
+from apps.api.core.muhasibi_account import apply_question_evidence_relevance_gate
+from apps.api.core.muhasibi_listen import run_listen
 
 
 class MuhasibiState(Enum):
@@ -59,6 +63,7 @@ class StateContext:
     listen_summary_ar: str = ""
     detected_entities: list[dict] = field(default_factory=list)
     question_keywords: list[str] = field(default_factory=list)
+    intent: Optional[dict[str, Any]] = None
 
     # PURPOSE outputs
     purpose: Optional[Purpose] = None
@@ -75,6 +80,7 @@ class StateContext:
     # ACCOUNT outputs
     citation_valid: bool = False
     account_issues: list[str] = field(default_factory=list)
+    refusal_suggestion_ar: Optional[str] = None
 
     # INTERPRET outputs
     answer_ar: str = ""
@@ -94,6 +100,8 @@ class StateContext:
     # Timing
     started_at: datetime = field(default_factory=datetime.utcnow)
     state_timings: dict[str, float] = field(default_factory=dict)
+    trace_enabled: bool = False
+    trace: list[dict[str, Any]] = field(default_factory=list)
 
 
 class MuhasibiMiddleware:
@@ -159,6 +167,30 @@ class MuhasibiMiddleware:
 
         return self._build_response(ctx)
 
+    async def process_with_trace(
+        self,
+        question: str,
+        language: str = "ar",
+        mode: str = "answer",
+    ) -> tuple[FinalResponse, list[dict[str, Any]]]:
+        """
+        Process a question and return a safe Muḥāsibī trace.
+        """
+        ctx = StateContext(question=question, language=language, mode=mode, trace_enabled=True)
+
+        current_state = MuhasibiState.LISTEN
+        while current_state not in (MuhasibiState.FINALIZE, MuhasibiState.FAILED):
+            try:
+                current_state = await self._execute_state(current_state, ctx)
+            except Exception as e:
+                ctx.error = str(e)
+                if ctx.retry_count < ctx.max_retries:
+                    ctx.retry_count += 1
+                    continue
+                current_state = MuhasibiState.FAILED
+
+        return self._build_response(ctx), ctx.trace
+
     async def _execute_state(
         self,
         state: MuhasibiState,
@@ -187,6 +219,10 @@ class MuhasibiMiddleware:
         # Record timing
         elapsed = (datetime.utcnow() - start).total_seconds()
         ctx.state_timings[state.name] = elapsed
+        if getattr(ctx, "trace_enabled", False):
+            snap = summarize_state(state.name, ctx)
+            snap["elapsed_s"] = elapsed
+            ctx.trace.append(snap)
 
         return next_state
 
@@ -199,31 +235,7 @@ class MuhasibiMiddleware:
         - Detects explicit pillar/value names
         - Extracts keywords
         """
-        # Normalize the question
-        ctx.normalized_question = normalize_for_matching(ctx.question)
-
-        # Extract keywords
-        ctx.question_keywords = extract_arabic_words(ctx.question)
-
-        # Detect entities if resolver is available
-        if self.entity_resolver:
-            resolved = self.entity_resolver.resolve(ctx.question)
-            ctx.detected_entities = [
-                {
-                    "type": r.entity_type.value,
-                    "id": r.entity_id,
-                    "name_ar": r.name_ar,
-                    "confidence": r.confidence,
-                }
-                for r in resolved
-            ]
-
-        # Create listen summary
-        if ctx.detected_entities:
-            entity_names = ", ".join(e["name_ar"] for e in ctx.detected_entities[:3])
-            ctx.listen_summary_ar = f"السؤال عن: {entity_names}"
-        else:
-            ctx.listen_summary_ar = f"سؤال عام: {ctx.question[:100]}"
+        await run_listen(self, ctx)
 
         return MuhasibiState.PURPOSE
 
@@ -377,8 +389,12 @@ class MuhasibiMiddleware:
         if not ctx.has_definition:
             ctx.account_issues.append("لا يوجد تعريف للمفهوم المطلوب")
 
+        # Out-of-scope gate: if evidence isn't relevant to the question, fail closed.
+        apply_question_evidence_relevance_gate(ctx)
+
         # Validation passes if we have evidence
-        ctx.citation_valid = True
+        if not ctx.not_found:
+            ctx.citation_valid = True
 
         return MuhasibiState.INTERPRET
 
@@ -388,105 +404,7 @@ class MuhasibiMiddleware:
 
         This state uses GPT-5 to interpret evidence packets.
         """
-        if ctx.not_found:
-            # No evidence - return refusal
-            ctx.answer_ar = "لا يوجد في البيانات الحالية ما يدعم الإجابة على هذا السؤال."
-            ctx.confidence = Confidence.LOW
-            ctx.citations = []
-            return MuhasibiState.REFLECT
-
-        if self.llm_client and ctx.evidence_packets:
-            result = await self.llm_client.interpret(
-                question=ctx.question,
-                evidence_packets=ctx.evidence_packets,
-                detected_entities=ctx.detected_entities,
-                mode=ctx.mode,
-            )
-            if result:
-                ctx.answer_ar = result.answer_ar
-                ctx.not_found = bool(result.not_found)
-                try:
-                    ctx.confidence = Confidence(result.confidence)
-                except Exception:
-                    ctx.confidence = Confidence.MEDIUM
-                # Map citations into Pydantic Citation objects
-                ctx.citations = [
-                    Citation(
-                        chunk_id=c.get("chunk_id", ""),
-                        source_anchor=c.get("source_anchor", ""),
-                        ref=c.get("ref"),
-                    )
-                    for c in result.citations
-                    if c.get("chunk_id") and c.get("source_anchor")
-                ]
-
-        # Deterministic fallback answer if evidence exists but no LLM call occurred.
-        if not ctx.answer_ar and ctx.evidence_packets:
-            defs = [p for p in ctx.evidence_packets if p.get("chunk_type") == "definition"]
-            evs = [p for p in ctx.evidence_packets if p.get("chunk_type") == "evidence"]
-            chosen = (defs[:1] + evs[:2]) or ctx.evidence_packets[:3]
-
-            parts = []
-            if defs:
-                parts.append(f"التعريف:\n{defs[0].get('text_ar','').strip()}")
-            if evs:
-                parts.append("التأصيل/الدليل:")
-                for e in evs[:2]:
-                    parts.append(e.get("text_ar", "").strip())
-
-            if not parts:
-                parts = ["تم العثور على أدلة، لكن تعذر تلخيصها آليًا بدون نموذج لغوي."]
-
-            ctx.answer_ar = "\n\n".join([p for p in parts if p])
-            ctx.citations = [
-                Citation(
-                    chunk_id=p.get("chunk_id", ""),
-                    source_anchor=p.get("source_anchor", ""),
-                    ref=(p.get("refs", [{}])[0].get("ref") if p.get("refs") else None),
-                )
-                for p in chosen
-                if p.get("chunk_id") and p.get("source_anchor")
-            ]
-            ctx.confidence = Confidence.MEDIUM if ctx.citations else Confidence.LOW
-            ctx.not_found = not bool(ctx.citations)
-
-        # If still no answer, refuse safely
-        if not ctx.answer_ar:
-            ctx.answer_ar = "لا يوجد في البيانات الحالية ما يدعم الإجابة على هذا السؤال."
-            ctx.not_found = True
-            ctx.confidence = Confidence.LOW
-            ctx.citations = []
-
-        # Run guardrails if available
-        if self.guardrails:
-            try:
-                result = self.guardrails.validate(
-                    answer_ar=ctx.answer_ar,
-                    citations=[c.model_dump() for c in ctx.citations],
-                    evidence_packets=ctx.evidence_packets,
-                    not_found=ctx.not_found,
-                )
-                if not result.passed:
-                    ctx.not_found = True
-                    ctx.answer_ar = "لا يوجد في البيانات الحالية ما يدعم الإجابة على هذا السؤال."
-                    ctx.citations = []
-                    ctx.confidence = Confidence.LOW
-            except Exception:
-                # Fail closed
-                ctx.not_found = True
-                ctx.answer_ar = "لا يوجد في البيانات الحالية ما يدعم الإجابة على هذا السؤال."
-                ctx.citations = []
-                ctx.confidence = Confidence.LOW
-
-        # Build entities from detected
-        ctx.entities = [
-            EntityRef(
-                type=EntityType(e["type"]),
-                id=e["id"],
-                name_ar=e["name_ar"],
-            )
-            for e in ctx.detected_entities
-        ]
+        await run_interpret(self, ctx)
 
         return MuhasibiState.REFLECT
 
@@ -496,34 +414,12 @@ class MuhasibiMiddleware:
 
         This state adds reflection without new claims.
         """
-        # For not_found, no reflection needed
-        if ctx.not_found:
-            ctx.reflection_added = False
-            return MuhasibiState.FINALIZE
-
-        if self.llm_client:
-            # TODO: Add reflection with constraints
-            pass
-
-        ctx.reflection_added = True
+        await run_reflect(self, ctx)
         return MuhasibiState.FINALIZE
 
     def _build_response(self, ctx: StateContext) -> FinalResponse:
         """Build the final response from context."""
-        return FinalResponse(
-            listen_summary_ar=ctx.listen_summary_ar,
-            purpose=ctx.purpose or Purpose(
-                ultimate_goal_ar="غير محدد",
-                constraints_ar=self.REQUIRED_CONSTRAINTS,
-            ),
-            path_plan_ar=ctx.path_plan_ar,
-            answer_ar=ctx.answer_ar,
-            citations=ctx.citations,
-            entities=ctx.entities,
-            difficulty=ctx.difficulty,
-            not_found=ctx.not_found,
-            confidence=ctx.confidence,
-        )
+        return build_final_response(self, ctx)
 
 
 def create_middleware(

@@ -56,11 +56,12 @@ class ProviderConfig:
         - LLM_MAX_TOKENS (optional)
         - LLM_TEMPERATURE (optional)
         """
-        provider_type_str = os.getenv("LLM_PROVIDER_TYPE", "azure_responses")
+        # Default to azure_chat since it supports response_format with JSON schema
+        provider_type_str = os.getenv("LLM_PROVIDER_TYPE", "azure_chat")
         try:
             provider_type = ProviderType(provider_type_str)
         except ValueError:
-            provider_type = ProviderType.AZURE_RESPONSES
+            provider_type = ProviderType.AZURE_CHAT
 
         endpoint = os.getenv("AZURE_OPENAI_ENDPOINT", "") or ""
         api_key = os.getenv("AZURE_OPENAI_API_KEY", "") or ""
@@ -281,7 +282,11 @@ class AzureChatProvider(LLMProvider):
             }
 
             if request.response_format:
-                params["response_format"] = {"type": "json_object"}
+                # Use JSON schema format for structured output
+                params["response_format"] = {
+                    "type": "json_schema",
+                    "json_schema": request.response_format,
+                }
 
             response = await client.chat.completions.create(**params)
 

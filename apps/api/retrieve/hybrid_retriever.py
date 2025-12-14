@@ -43,7 +43,7 @@ class HybridRetriever:
         enable_vector: bool = True,
         enable_graph: bool = True,
     ):
-        self.merge_ranker = merge_ranker or MergeRanker(max_packets=10)
+        self.merge_ranker = merge_ranker or MergeRanker(max_packets=25)
         self.vector_retriever = vector_retriever or VectorRetriever()
         self.enable_vector = enable_vector
         self.enable_graph = enable_graph
