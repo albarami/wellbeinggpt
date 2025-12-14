@@ -33,6 +33,7 @@ from apps.api.core.muhasibi_interpret import run_interpret, run_reflect, build_f
 from apps.api.core.muhasibi_trace import summarize_state
 from apps.api.core.muhasibi_account import apply_question_evidence_relevance_gate
 from apps.api.core.muhasibi_listen import run_listen
+from apps.api.core.muhasibi_reasoning import ChainStage, build_reasoning_trace
 
 
 class MuhasibiState(Enum):
@@ -319,6 +320,52 @@ class MuhasibiMiddleware:
                     ctx.has_evidence = merge.has_evidence
             except Exception as e:
                 ctx.account_issues.append(f"فشل الاسترجاع: {e}")
+
+        # Deterministic retrieval hints from Muḥāsibī chain stage (no LLM).
+        # Reason: action/habit questions benefit from procedural phrasing and can improve recall.
+        try:
+            if (
+                self.retriever
+                and hasattr(self.retriever, "_session")
+                and self.retriever._session
+                and getattr(self.retriever, "retrieve", None)
+                and ctx.detected_entities
+            ):
+                trace = build_reasoning_trace(
+                    question=ctx.question,
+                    detected_entities=ctx.detected_entities,
+                    evidence_packets=ctx.evidence_packets,
+                    intent=ctx.intent,
+                    difficulty=getattr(ctx.difficulty, "value", None),
+                )
+                if trace.chain_stage in {ChainStage.ACTION, ChainStage.HABIT, ChainStage.FIXED_INTENTION}:
+                    session = self.retriever._session
+                    extra_packets: list[dict[str, Any]] = []
+                    names = [str(e.get("name_ar") or "") for e in (ctx.detected_entities or []) if e.get("name_ar")]
+                    hint_queries: list[str] = []
+                    for n in names[:2]:
+                        hint_queries.extend([f"{n} إجرائي", f"{n} خطوات", f"كيفية تطبيق {n}"])
+                    for q in hint_queries[:4]:
+                        try:
+                            merge2 = await self.retriever.retrieve(
+                                session,
+                                RetrievalInputs(query=q, resolved_entities=ctx.detected_entities),
+                            )
+                            extra_packets.extend(merge2.evidence_packets)
+                        except Exception:
+                            continue
+
+                    # Merge deterministically: keep existing first, then add unique chunk_ids.
+                    if extra_packets:
+                        seen = {p.get("chunk_id") for p in ctx.evidence_packets if p.get("chunk_id")}
+                        for p in extra_packets:
+                            cid = p.get("chunk_id")
+                            if cid and cid not in seen:
+                                ctx.evidence_packets.append(p)
+                                seen.add(cid)
+                        ctx.evidence_packets = ctx.evidence_packets[:12]
+        except Exception:
+            pass
 
         # If retrieval is weak, use GPT-5 ONLY to rewrite the query (not to answer),
         # then run additional non-LLM retrieval attempts.
