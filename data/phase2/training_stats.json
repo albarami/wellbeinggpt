@@ -1,0 +1,14 @@
+{
+  "generated_at": "2025-12-20T15:24:59.767617Z",
+  "total_traces": 902,
+  "valid_traces": 716,
+  "questions_processed": 716,
+  "reranker_positives": 5385,
+  "reranker_hard_negatives": 3315,
+  "reranker_total_pairs": 52200,
+  "edge_scorer_positives": 53,
+  "edge_scorer_negatives": 159,
+  "edge_scorer_total_pairs": 212,
+  "unique_chunks": 358,
+  "unique_edges": 44
+}

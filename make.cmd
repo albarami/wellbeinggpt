@@ -62,6 +62,10 @@ if /I "%TARGET%"=="bakeoff-sanity" goto :bakeoff_sanity
 
 if /I "%TARGET%"=="bakeoff-full" goto :bakeoff_full
 
+if /I "%TARGET%"=="generate-phase2-data" goto :generate_phase2_data
+
+if /I "%TARGET%"=="train-reranker-phase2" goto :train_reranker_phase2
+
 
 
 echo Unknown target: %TARGET%
@@ -352,6 +356,35 @@ exit /b %ERRORLEVEL%
 
 
 
+:generate_phase2_data
+
+rem Generate Phase 2 training data (Option B: framework + mechanism graph labels)
+rem Output: data/phase2/reranker_train.jsonl, edge_scorer_train.jsonl
+
+echo Generating Phase 2 training data...
+python scripts/generate_phase2_training_data.py --target-pairs 100000
+
+exit /b %ERRORLEVEL%
+
+
+
+:train_reranker_phase2
+
+rem Train Phase 2 reranker on 8xA100 with hard negatives
+rem Uses DataParallel for multi-GPU training
+
+if not exist "data\phase2\reranker_train.jsonl" (
+  echo ERROR: Training data not found. Run: make generate-phase2-data
+  exit /b 1
+)
+
+echo Training Phase 2 reranker on multi-GPU...
+python scripts/train_reranker_phase2.py --train data\phase2\reranker_train.jsonl --model aubmindlab/bert-base-arabertv2 --out checkpoints\reranker_phase2 --epochs 3 --batch-size 64
+
+exit /b %ERRORLEVEL%
+
+
+
 :help
 
 echo Usage: make ^<target^>
@@ -360,5 +393,6 @@ echo Targets: test preflight-eval eval eval-deep tune-eligibility eval-fast
 echo          eval-stakeholder eval-muhasibi-ab eval-muhasibi-breakthrough
 echo          train-reranker eval-bakeoff-depth eval-regression rescore-bakeoff
 echo          ci reranker-ab bakeoff-sanity bakeoff-full
+echo          generate-phase2-data train-reranker-phase2
 
 exit /b 2
