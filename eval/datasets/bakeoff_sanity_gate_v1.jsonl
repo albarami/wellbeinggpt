@@ -1,0 +1,50 @@
+{"id": "synth-001", "question": "كيف يؤدي الإطار إلى ازدهار الإنسان؟", "type": "global_synthesis", "category": "synthesis", "difficulty": "hard", "expect_abstain": false}
+{"id": "synth-002", "question": "ما هي الحياة الطيبة وفق الإطار؟", "type": "global_synthesis", "category": "synthesis", "difficulty": "hard", "expect_abstain": false}
+{"id": "synth-003", "question": "كيف يسهم الإطار في نهضة المجتمع؟", "type": "global_synthesis", "category": "synthesis", "difficulty": "hard", "expect_abstain": false}
+{"id": "synth-004", "question": "ما العلاقة بين جميع الركائز الخمس؟", "type": "global_synthesis", "category": "synthesis", "difficulty": "hard", "expect_abstain": false}
+{"id": "synth-005", "question": "كيف تعمل الركائز معًا لتحقيق التوازن؟", "type": "global_synthesis", "category": "synthesis", "difficulty": "hard", "expect_abstain": false}
+{"id": "synth-006", "question": "ما المنظور الكلي للإطار؟", "type": "global_synthesis", "category": "synthesis", "difficulty": "hard", "expect_abstain": false}
+{"id": "synth-007", "question": "كيف يحقق الإطار التكامل الشامل؟", "type": "global_synthesis", "category": "synthesis", "difficulty": "hard", "expect_abstain": false}
+{"id": "synth-008", "question": "ما الصورة الكبرى التي يقدمها الإطار؟", "type": "global_synthesis", "category": "synthesis", "difficulty": "hard", "expect_abstain": false}
+{"id": "synth-009", "question": "كيف يتكامل الإطار ككل؟", "type": "global_synthesis", "category": "synthesis", "difficulty": "hard", "expect_abstain": false}
+{"id": "synth-010", "question": "ما هي الرؤية الشاملة للإطار؟", "type": "global_synthesis", "category": "synthesis", "difficulty": "hard", "expect_abstain": false}
+{"id": "synth-011", "question": "كيف يصف الإطار الإنسان الكامل؟", "type": "global_synthesis", "category": "synthesis", "difficulty": "hard", "expect_abstain": false}
+{"id": "synth-012", "question": "ما صورة المجتمع المثالي في الإطار؟", "type": "global_synthesis", "category": "synthesis", "difficulty": "hard", "expect_abstain": false}
+{"id": "synth-013", "question": "كيف يحقق الإطار خير البشرية؟", "type": "global_synthesis", "category": "synthesis", "difficulty": "hard", "expect_abstain": false}
+{"id": "synth-014", "question": "ما دور الإطار في تحقيق رفاهية الإنسان؟", "type": "global_synthesis", "category": "synthesis", "difficulty": "hard", "expect_abstain": false}
+{"id": "synth-015", "question": "ما علاقة الإطار بسعادة الإنسان؟", "type": "global_synthesis", "category": "synthesis", "difficulty": "hard", "expect_abstain": false}
+{"id": "cross-001", "question": "كيف ترتبط الحياة الروحية بالحياة الاجتماعية؟", "type": "cross_pillar", "category": "cross_pillar", "difficulty": "hard", "expect_abstain": false}
+{"id": "cross-002", "question": "ما علاقة الإحسان بالتوكل؟", "type": "cross_pillar", "category": "cross_pillar", "difficulty": "hard", "expect_abstain": false}
+{"id": "cross-003", "question": "اشرح كيف يسهم التوازن الجسدي في السكينة النفسية", "type": "cross_pillar", "category": "cross_pillar", "difficulty": "hard", "expect_abstain": false}
+{"id": "cross-004", "question": "كيف تترابط الركيزة الروحية والعاطفية والفكرية؟", "type": "cross_pillar", "category": "cross_pillar", "difficulty": "hard", "expect_abstain": false}
+{"id": "cross-005", "question": "كيف يؤثر التوازن الروحي على الصحة البدنية؟", "type": "cross_pillar", "category": "cross_pillar", "difficulty": "hard", "expect_abstain": false}
+{"id": "cross-006", "question": "ما تأثير العلاقات الاجتماعية على الصحة النفسية؟", "type": "cross_pillar", "category": "cross_pillar", "difficulty": "hard", "expect_abstain": false}
+{"id": "cross-007", "question": "كيف يعزز الإيمان الصحة العاطفية؟", "type": "cross_pillar", "category": "cross_pillar", "difficulty": "hard", "expect_abstain": false}
+{"id": "cross-008", "question": "كيف تتداخل القيم الروحية مع القيم الاجتماعية؟", "type": "cross_pillar", "category": "cross_pillar", "difficulty": "hard", "expect_abstain": false}
+{"id": "cross-009", "question": "ما أثر الصحة الفكرية على العلاقات الاجتماعية؟", "type": "cross_pillar", "category": "cross_pillar", "difficulty": "hard", "expect_abstain": false}
+{"id": "cross-010", "question": "متى ينقلب الاهتمام بالحياة البدنية الطيبة إلى انحراف داخل الإطار؟", "type": "cross_pillar", "category": "cross_pillar", "difficulty": "hard", "expect_abstain": false}
+{"id": "cross-011", "question": "قدّم مسار ربط من الحياة البدنية إلى الحياة الاجتماعية خطوة بخطوة", "type": "cross_pillar", "category": "cross_pillar", "difficulty": "hard", "expect_abstain": false}
+{"id": "cross-012", "question": "اشرح كيف يعمل ميزان الإفراط والتفريط كحدٍّ يضبط قيمة من قيم الحياة الفكرية", "type": "cross_pillar", "category": "cross_pillar", "difficulty": "hard", "expect_abstain": false}
+{"id": "cross-013", "question": "ابنِ شبكة ربط حول ركيزة بدنية واحدة كمحور إلى 4 ركائز أخرى", "type": "cross_pillar", "category": "network", "difficulty": "hard", "expect_abstain": false}
+{"id": "cross-014", "question": "قدّم سلسلة من 3 روابط عبر الركائز تبدأ من البدني وتنتهي بالروحي", "type": "cross_pillar", "category": "network", "difficulty": "hard", "expect_abstain": false}
+{"id": "cross-015", "question": "ابنِ شبكة تربط قيمة محورية بغير ركيزتها إلى ثلاث ركائز أخرى", "type": "cross_pillar", "category": "network", "difficulty": "hard", "expect_abstain": false}
+{"id": "bound-001", "question": "ما هي حدود الاستدلال في موضوع الشكر؟", "type": "boundaries", "category": "boundaries", "difficulty": "hard", "expect_abstain": false}
+{"id": "bound-002", "question": "ما حدود العلاقة بين الصحة البدنية والسكينة الروحية إذا لم تجد نصًا صريحًا؟", "type": "boundaries", "category": "boundaries", "difficulty": "hard", "expect_abstain": false}
+{"id": "bound-003", "question": "فرّق بين التزكية والالتزام من حيث التعريف والمظهر العملي والحد المانع للانحراف", "type": "boundaries", "category": "boundaries", "difficulty": "hard", "expect_abstain": false}
+{"id": "bound-004", "question": "فرّق بين العبادة والإيمان داخل الإطار", "type": "boundaries", "category": "boundaries", "difficulty": "hard", "expect_abstain": false}
+{"id": "bound-005", "question": "ما التناقضات المحتملة بين الركائز وكيف تُحل؟", "type": "boundaries", "category": "boundaries", "difficulty": "hard", "expect_abstain": false}
+{"id": "bound-006", "question": "كيف يوفق الإطار بين الروحي والمادي؟", "type": "boundaries", "category": "boundaries", "difficulty": "hard", "expect_abstain": false}
+{"id": "bound-007", "question": "ما الذي لا تستطيع أن تدّعيه عن العلاقة بين الصحة البدنية والسكينة الروحية؟", "type": "boundaries", "category": "boundaries", "difficulty": "hard", "expect_abstain": false}
+{"id": "bound-008", "question": "اذكر مثالًا على تعارض ظاهري بين الاجتماعي والفكري داخل الإطار", "type": "boundaries", "category": "boundaries", "difficulty": "hard", "expect_abstain": false}
+{"id": "bound-009", "question": "ما حدود الربط بين الركائز غير المنصوص عليها؟", "type": "boundaries", "category": "boundaries", "difficulty": "hard", "expect_abstain": false}
+{"id": "bound-010", "question": "ما الفرق بين الصبر والرضا؟", "type": "boundaries", "category": "boundaries", "difficulty": "hard", "expect_abstain": false}
+{"id": "chat-001", "question": "أشعر بالضيق هذه الأيام، ماذا يقول الإطار عن ذلك؟", "type": "natural_chat", "category": "natural_chat", "difficulty": "medium", "expect_abstain": false}
+{"id": "chat-002", "question": "كيف أوازن بين عملي وحياتي الروحية؟", "type": "natural_chat", "category": "natural_chat", "difficulty": "medium", "expect_abstain": false}
+{"id": "chat-003", "question": "أريد أن أحسن علاقتي بربي، من أين أبدأ؟", "type": "natural_chat", "category": "natural_chat", "difficulty": "medium", "expect_abstain": false}
+{"id": "chat-004", "question": "كيف أتعامل مع القلق من وجهة نظر الإطار؟", "type": "natural_chat", "category": "natural_chat", "difficulty": "medium", "expect_abstain": false}
+{"id": "chat-005", "question": "ما نصيحة الإطار لمن يشعر بالوحدة؟", "type": "natural_chat", "category": "natural_chat", "difficulty": "medium", "expect_abstain": false}
+{"id": "chat-006", "question": "كيف أطبق الصبر عند الغضب؟", "type": "natural_chat", "category": "natural_chat", "difficulty": "medium", "expect_abstain": false}
+{"id": "chat-007", "question": "أعاني من التسويف، هل يتناول الإطار هذا الموضوع؟", "type": "natural_chat", "category": "natural_chat", "difficulty": "medium", "expect_abstain": false}
+{"id": "chat-008", "question": "كيف أحافظ على هدوئي في المواقف الصعبة؟", "type": "natural_chat", "category": "natural_chat", "difficulty": "medium", "expect_abstain": false}
+{"id": "chat-009", "question": "ما رأي الإطار في تنظيم الوقت؟", "type": "natural_chat", "category": "natural_chat", "difficulty": "medium", "expect_abstain": false}
+{"id": "chat-010", "question": "كيف أقوي إيماني؟", "type": "natural_chat", "category": "natural_chat", "difficulty": "medium", "expect_abstain": false}

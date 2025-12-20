@@ -58,6 +58,10 @@ if /I "%TARGET%"=="ci" goto :ci
 
 if /I "%TARGET%"=="reranker-ab" goto :reranker_ab
 
+if /I "%TARGET%"=="bakeoff-sanity" goto :bakeoff_sanity
+
+if /I "%TARGET%"=="bakeoff-full" goto :bakeoff_full
+
 
 
 echo Unknown target: %TARGET%
@@ -324,6 +328,30 @@ exit /b %ERRORLEVEL%
 
 
 
+:bakeoff_sanity
+
+rem Bakeoff Sanity Gate: 50-question scheduled check (nightly/weekly)
+rem Thresholds: PASS_FULL>=95%, unexpected_fail<=3%, citation>=95%, edges>=2.0
+
+echo Running Bakeoff Sanity Gate...
+python scripts/run_bakeoff_sanity_gate.py
+
+exit /b %ERRORLEVEL%
+
+
+
+:bakeoff_full
+
+rem Full 160-question bakeoff through the real system (/ask/ui)
+rem Use this to establish baselines before/after training
+
+echo Running Full System Bakeoff (160 questions)...
+python scripts/run_system_depth_bakeoff.py
+
+exit /b %ERRORLEVEL%
+
+
+
 :help
 
 echo Usage: make ^<target^>
@@ -331,6 +359,6 @@ echo Usage: make ^<target^>
 echo Targets: test preflight-eval eval eval-deep tune-eligibility eval-fast
 echo          eval-stakeholder eval-muhasibi-ab eval-muhasibi-breakthrough
 echo          train-reranker eval-bakeoff-depth eval-regression rescore-bakeoff
-echo          ci reranker-ab
+echo          ci reranker-ab bakeoff-sanity bakeoff-full
 
 exit /b 2

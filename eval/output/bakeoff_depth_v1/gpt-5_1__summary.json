@@ -1,0 +1,38 @@
+{
+  "deployment": "gpt-5.1",
+  "dataset_hash": "8331d935a61e5e1d",
+  "total_questions": 160,
+  "answered": 9,
+  "abstained": 150,
+  "errors": 1,
+  "disqualified": false,
+  "disqualification_reason": "",
+  "metrics": {
+    "depth": {
+      "avg_words": 841.3,
+      "avg_concepts": 12.22,
+      "structure_rate": 100.0,
+      "summary_rate": 100.0,
+      "claim_density": 6.111,
+      "score": 100.0
+    },
+    "cross_pillar": {
+      "avg_pillars": 4.78,
+      "multi_pillar_rate": 100.0,
+      "score": 100.0
+    },
+    "naturalness": {
+      "avg_redundancy": 0.0,
+      "avg_bullets": 76.6,
+      "bullet_spam_rate": 100.0,
+      "score": 50.0
+    },
+    "integrity": {
+      "citation_validity_errors": 0,
+      "unsupported_must_cite_rate": 0.0,
+      "score": 100
+    }
+  },
+  "composite_score": 92.5,
+  "timestamp": "2025-12-20T11:49:04.951444"
+}
