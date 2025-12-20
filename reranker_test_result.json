@@ -1,0 +1,8 @@
+{
+  "reranker_enabled": true,
+  "reranker_type": "CrossEncoderReranker",
+  "positive_doc_score": 0.5420291423797607,
+  "negative_doc_score": 0.1778498888015747,
+  "difference": 0.36417925357818604,
+  "correct_ranking": true
+}

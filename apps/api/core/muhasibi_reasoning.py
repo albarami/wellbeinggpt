@@ -258,3 +258,7 @@ def render_reasoning_block(trace: MuhasibiReasoningTrace) -> str:
     ]
     return "\n".join([l for l in lines if l is not None]).strip() + "\n"
 
+
+
+
+

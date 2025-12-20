@@ -18,41 +18,51 @@ from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import NullPool
 
 
-# Get database URL from environment
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+asyncpg://wellbeing:wellbeing_dev_password@127.0.0.1:5432/wellbeing_db"
-)
-
-# Convert to async URL if needed
-if DATABASE_URL.startswith("postgresql://"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
-
-# Windows/localhost IPv6 pitfall:
-# On some Windows machines, asyncpg may resolve "localhost" to ::1 and hit a different Postgres listener
-# than the IPv4 one used by other clients. Prefer IPv4 unless explicitly disabled.
-if os.name == "nt" and os.getenv("DB_HOST_PREFER_IPV4", "true").lower() == "true":
-    DATABASE_URL = DATABASE_URL.replace("@localhost:", "@127.0.0.1:")
+def _db_url_from_env() -> str:
+    """Compute DB URL from current environment."""
+    url = os.getenv(
+        "DATABASE_URL",
+        "postgresql+asyncpg://wellbeing:wellbeing_dev_password@127.0.0.1:5432/wellbeing_db",
+    )
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://")
+    # Windows/localhost IPv6 pitfall: prefer IPv4.
+    if os.name == "nt" and os.getenv("DB_HOST_PREFER_IPV4", "true").lower() == "true":
+        url = url.replace("@localhost:", "@127.0.0.1:")
+    return url
 
 
-# Create async engine
-# Reason: On Windows with pytest-asyncio (per-test event loops), pooled asyncpg
-# connections can become bound to a closed loop and cause "Event loop is closed"
-# errors on subsequent tests. Disable pooling under pytest for determinism.
-use_null_pool = "pytest" in sys.modules
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=os.getenv("DEBUG", "").lower() == "true",
-    pool_pre_ping=True,
-    poolclass=NullPool if use_null_pool else None,
-)
+_engine = None
+_engine_url: str | None = None
+_session_maker = None
 
-# Session factory
-async_session_maker = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-)
+
+def _get_engine():
+    """Get (or create) an engine bound to the current env DATABASE_URL."""
+    global _engine, _engine_url, _session_maker
+    url = _db_url_from_env()
+
+    # Reason: some CLI tools load .env after import; ensure engine reflects env.
+    if _engine is None or _engine_url != url:
+        use_null_pool = "pytest" in sys.modules
+        _engine = create_async_engine(
+            url,
+            echo=os.getenv("DEBUG", "").lower() == "true",
+            pool_pre_ping=True,
+            poolclass=NullPool if use_null_pool else None,
+        )
+        _engine_url = url
+        _session_maker = async_sessionmaker(
+            _engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+    return _engine
+
+
+def _get_session_maker():
+    _get_engine()
+    return _session_maker
 
 
 class Base(DeclarativeBase):
@@ -73,7 +83,8 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
     Yields:
         AsyncSession: Database session.
     """
-    async with async_session_maker() as session:
+    sm = _get_session_maker()
+    async with sm() as session:
         try:
             yield session
             await session.commit()
@@ -94,5 +105,8 @@ async def init_db() -> None:
 
 async def close_db() -> None:
     """Close database connections."""
-    await engine.dispose()
+    global _engine
+    if _engine is not None:
+        await _engine.dispose()
+        _engine = None
 

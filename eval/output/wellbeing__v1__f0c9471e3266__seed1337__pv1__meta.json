@@ -1,0 +1,13 @@
+{
+  "code_commit": "9cab9fa0e7f72bcc786d9ed0d270a33ac76a9ca0",
+  "dataset_id": "wellbeing",
+  "dataset_sha256": "f0c9471e3266db8616a25af61d5ded19477723e55781ba2b07b59e79c3b8f218",
+  "dataset_version": "v1",
+  "generated_at_utc": "2025-12-14T09:41:47+00:00",
+  "llm_deployment": "gpt-5-chat",
+  "llm_model": null,
+  "llm_provider": "azure_openai",
+  "prompts_version": "v1",
+  "run_id": "wellbeing__v1__f0c9471e3266__seed1337__pv1",
+  "seed": 1337
+}

@@ -29,6 +29,8 @@ class MergeResult:
     sources_used: list[str]
     has_definition: bool
     has_evidence: bool
+    # Deterministic retrieval trace (ranked final list).
+    ranked_chunks: list[dict[str, Any]] = field(default_factory=list)
 
 
 class MergeRanker:
@@ -147,11 +149,27 @@ class MergeRanker:
 
         # Build result
         evidence_packets = [p.packet for p in final_packets]
-        sources_used = list(set(
-            source
-            for p in final_packets
-            for source in p.sources
-        ))
+        sources_used = sorted(
+            list(
+                set(
+                    source
+                    for p in final_packets
+                    for source in p.sources
+                )
+            )
+        )
+
+        ranked_chunks: list[dict[str, Any]] = []
+        for idx, p in enumerate(final_packets, start=1):
+            ranked_chunks.append(
+                {
+                    "rank": idx,
+                    "chunk_id": str(p.packet.get("chunk_id", "")),
+                    "score": float(p.score),
+                    "sources": sorted(list(set(p.sources))),
+                    "backend": str(p.packet.get("backend") or ""),
+                }
+            )
 
         has_definition = any(
             p["chunk_type"] == ChunkType.DEFINITION.value
@@ -171,6 +189,7 @@ class MergeRanker:
             sources_used=sources_used,
             has_definition=has_definition,
             has_evidence=has_evidence,
+            ranked_chunks=ranked_chunks,
         )
 
     def _base_score(

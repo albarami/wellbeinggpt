@@ -209,18 +209,30 @@ class TestEndToEndScenarios:
 
 
 class TestMuhasibiReasoningVisibility:
-    """Muḥāsibī reasoning block visibility tests (schema-safe)."""
+    """Muḥāsibī reasoning block visibility tests (schema-safe).
+    
+    Note: Per engineering fix, reasoning block is NOT prepended to answer_ar.
+    It is stored in _last_reasoning_trace for debug/UI access only.
+    This prevents the block from ruining naturalness and confusing contract parsing.
+    """
 
     @pytest.mark.asyncio
-    async def test_muhasibi_always_includes_reasoning_block_in_answer_ar(self):
+    async def test_muhasibi_stores_reasoning_trace_internally(self):
+        """Reasoning trace is stored internally, NOT in user-facing answer_ar."""
         from apps.api.core.muhasibi_reasoning import REASONING_START, REASONING_END
 
         middleware = create_middleware()
         response = await middleware.process("ما هي نظرية الكم في الفيزياء؟")
 
-        assert REASONING_START in response.answer_ar
-        assert REASONING_END in response.answer_ar
-        assert response.answer_ar.strip().startswith(REASONING_START)
+        # Reasoning block should NOT be in user-facing answer (engineering fix)
+        assert REASONING_START not in response.answer_ar
+        assert REASONING_END not in response.answer_ar
+        
+        # Reasoning trace should be stored internally for debug/UI access
+        assert hasattr(middleware, "_last_reasoning_trace")
+        trace = getattr(middleware, "_last_reasoning_trace", None)
+        # Trace may be None for out-of-corpus questions (no evidence to reason about)
+        # but the attribute should exist
 
     @pytest.mark.asyncio
     async def test_baseline_does_not_include_reasoning_block(self):

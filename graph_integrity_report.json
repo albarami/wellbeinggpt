@@ -1,0 +1,27 @@
+{
+  "generated_at": "2025-12-14T05:51:52.392492",
+  "counts": {
+    "pillar": 5,
+    "core_value": 15,
+    "sub_value": 86,
+    "evidence": 358,
+    "chunk": 552,
+    "edge": 1107
+  },
+  "edge_counts": {
+    "CONTAINS": 101,
+    "MENTIONS_REF": 269,
+    "REFERS_TO": 301,
+    "SAME_NAME": 11,
+    "SHARES_REF": 67,
+    "SUPPORTED_BY": 358
+  },
+  "issues": {
+    "core_values_missing_parent": [],
+    "sub_values_missing_parent": [],
+    "entities_with_evidence_missing_supported_by": [],
+    "orphan_edges": []
+  },
+  "status": "complete",
+  "issues_count": 0
+}

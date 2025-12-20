@@ -30,6 +30,7 @@ from apps.api.retrieve.normalize_ar import normalize_for_matching, extract_arabi
 from apps.api.retrieve.hybrid_retriever import HybridRetriever, RetrievalInputs
 from apps.api.llm.muhasibi_llm_client import MuhasibiLLMClient
 from apps.api.core.muhasibi_interpret import run_interpret, run_reflect, build_final_response
+from apps.api.core.contract_gate import apply_runtime_contract_gate
 from apps.api.core.muhasibi_trace import summarize_state
 from apps.api.core.muhasibi_account import apply_question_evidence_relevance_gate
 from apps.api.core.muhasibi_listen import run_listen
@@ -57,7 +58,7 @@ class StateContext:
     # Input
     question: str
     language: str = "ar"
-    mode: str = "answer"  # answer|debate|socratic|judge
+    mode: str = "natural_chat"  # natural_chat|answer|debate|socratic|judge
 
     # LISTEN outputs
     normalized_question: str = ""
@@ -197,25 +198,61 @@ class MuhasibiMiddleware:
         state: MuhasibiState,
         ctx: StateContext,
     ) -> MuhasibiState:
-        """Execute a single state and return the next state."""
+        """Execute a single state and return the next state.
+
+        Root-cause guard:
+        - This pipeline must never hang indefinitely in production.
+        - We add per-state timeouts + start/end logging so we can pinpoint the exact blocker.
+        """
+        import asyncio
+        import hashlib
+        import logging
+
+        logger = logging.getLogger(__name__)
+        qid = hashlib.sha1((ctx.question or "").encode("utf-8")).hexdigest()[:8]
         start = datetime.utcnow()
 
-        if state == MuhasibiState.LISTEN:
-            next_state = await self._state_listen(ctx)
-        elif state == MuhasibiState.PURPOSE:
-            next_state = await self._state_purpose(ctx)
-        elif state == MuhasibiState.PATH:
-            next_state = await self._state_path(ctx)
-        elif state == MuhasibiState.RETRIEVE:
-            next_state = await self._state_retrieve(ctx)
-        elif state == MuhasibiState.ACCOUNT:
-            next_state = await self._state_account(ctx)
-        elif state == MuhasibiState.INTERPRET:
-            next_state = await self._state_interpret(ctx)
-        elif state == MuhasibiState.REFLECT:
-            next_state = await self._state_reflect(ctx)
-        else:
-            next_state = MuhasibiState.FAILED
+        # Deterministic per-state timeouts (seconds).
+        # Reason: prevent request-level deadlocks and make issues observable.
+        timeouts: dict[MuhasibiState, float] = {
+            MuhasibiState.LISTEN: 15.0,
+            MuhasibiState.PURPOSE: 90.0,
+            MuhasibiState.PATH: 15.0,
+            MuhasibiState.RETRIEVE: 90.0,
+            MuhasibiState.ACCOUNT: 45.0,
+            MuhasibiState.INTERPRET: 180.0,
+            MuhasibiState.REFLECT: 90.0,
+        }
+
+        async def _run_state() -> MuhasibiState:
+            if state == MuhasibiState.LISTEN:
+                return await self._state_listen(ctx)
+            if state == MuhasibiState.PURPOSE:
+                return await self._state_purpose(ctx)
+            if state == MuhasibiState.PATH:
+                return await self._state_path(ctx)
+            if state == MuhasibiState.RETRIEVE:
+                return await self._state_retrieve(ctx)
+            if state == MuhasibiState.ACCOUNT:
+                return await self._state_account(ctx)
+            if state == MuhasibiState.INTERPRET:
+                return await self._state_interpret(ctx)
+            if state == MuhasibiState.REFLECT:
+                return await self._state_reflect(ctx)
+            return MuhasibiState.FAILED
+
+        timeout_s = float(timeouts.get(state, 120.0))
+        logger.info(f"[MUHASIBI] qid={qid} state_start={state.name} timeout_s={timeout_s}")
+        try:
+            next_state = await asyncio.wait_for(_run_state(), timeout=timeout_s)
+        except asyncio.TimeoutError:
+            ctx.error = f"Timeout in state {state.name} after {timeout_s:.0f}s"
+            logger.error(f"[MUHASIBI] qid={qid} state_timeout={state.name} after_s={timeout_s}")
+            return MuhasibiState.FAILED
+        except Exception as e:
+            # Preserve existing retry behavior in the outer loop; still log here for diagnosis.
+            logger.exception(f"[MUHASIBI] qid={qid} state_error={state.name} err={e}")
+            raise
 
         # Record timing
         elapsed = (datetime.utcnow() - start).total_seconds()
@@ -225,6 +262,7 @@ class MuhasibiMiddleware:
             snap["elapsed_s"] = elapsed
             ctx.trace.append(snap)
 
+        logger.info(f"[MUHASIBI] qid={qid} state_done={state.name} elapsed_s={elapsed:.3f}")
         return next_state
 
     async def _state_listen(self, ctx: StateContext) -> MuhasibiState:
@@ -404,6 +442,36 @@ class MuhasibiMiddleware:
             except Exception:
                 pass
 
+        # SEED RETRIEVAL FLOOR for broad intents
+        # Reason: global_synthesis, cross_pillar, guidance_framework_chat, and natural_chat
+        # must never abstain with 0 citations due to missing entity anchors.
+        # Always include pillar definitions + bridge notes for these intents.
+        try:
+            intent = getattr(ctx, "intent", None) or {}
+            intent_type = str(intent.get("intent_type") or "")
+            mode = getattr(ctx, "mode", "") or ""
+            
+            needs_seed_floor = (
+                intent_type in {
+                    "system_limits_policy",
+                    "guidance_framework_chat",
+                    "global_synthesis",
+                    "cross_pillar",
+                    "network_build",
+                    "compare",
+                    "world_model",
+                }
+                or intent.get("requires_seed_retrieval")
+                or intent.get("bypass_relevance_gate")
+                or (mode == "natural_chat" and not ctx.detected_entities)
+            )
+            
+            if needs_seed_floor and self.retriever and hasattr(self.retriever, "_session") and self.retriever._session:
+                session = self.retriever._session
+                await self._add_seed_retrieval_floor(ctx, session)
+        except Exception:
+            pass
+
         # If still empty, keep flags consistent
         ctx.has_definition = len([
             p for p in ctx.evidence_packets
@@ -416,6 +484,117 @@ class MuhasibiMiddleware:
         ]) > 0
 
         return MuhasibiState.ACCOUNT
+
+    async def _add_seed_retrieval_floor(self, ctx: StateContext, session) -> None:
+        """
+        Add seed evidence floor for broad/synthesis intents.
+        
+        This ensures global_synthesis, guidance_framework_chat, and natural_chat
+        never abstain with 0 citations due to missing entity anchors.
+        
+        Seeds:
+        - 5 pillar definition chunks (one per pillar)
+        - Top 5 bridge notes
+        - Top 5 cross-pillar edges with justification spans
+        """
+        from sqlalchemy import text
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        existing_chunk_ids = {p.get("chunk_id") for p in ctx.evidence_packets if p.get("chunk_id")}
+        
+        try:
+            # 1. Fetch pillar definition chunks (one per pillar)
+            # chunk table uses entity_type + entity_id (not pillar_id)
+            pillar_rows = (await session.execute(text("""
+                SELECT DISTINCT ON (c.entity_id)
+                    c.chunk_id as chunk_id,
+                    c.text_ar,
+                    c.chunk_type,
+                    p.id as pillar_id,
+                    p.name_ar as pillar_name_ar
+                FROM chunk c
+                JOIN pillar p ON c.entity_id = p.id
+                WHERE c.entity_type = 'pillar' AND c.chunk_type = 'definition'
+                ORDER BY c.entity_id, c.chunk_id
+                LIMIT 5
+            """))).fetchall()
+            
+            for row in pillar_rows:
+                cid = str(row.chunk_id)
+                if cid not in existing_chunk_ids:
+                    ctx.evidence_packets.append({
+                        "chunk_id": cid,
+                        "text_ar": row.text_ar,
+                        "chunk_type": row.chunk_type,
+                        "entity_type": "pillar",
+                        "entity_id": str(row.pillar_id),
+                        "entity_name_ar": row.pillar_name_ar,
+                        "source": "seed_floor",
+                    })
+                    existing_chunk_ids.add(cid)
+            
+        except Exception as e:
+            logger.warning(f"Seed retrieval floor pillar fetch failed: {e}")
+        
+        # 2. Fetch cross-pillar edges as seeds (alternative to scholar_note table)
+        try:
+            edge_rows = (await session.execute(text("""
+                SELECT 
+                    e.edge_id,
+                    e.relation_type,
+                    e.from_entity_id,
+                    e.to_entity_id,
+                    ej.quote as justification_quote,
+                    c.chunk_id as source_chunk_id,
+                    c.text_ar as chunk_text_ar
+                FROM edge e
+                LEFT JOIN edge_justification_span ej ON ej.edge_id = e.edge_id
+                LEFT JOIN chunk c ON c.chunk_id = ej.chunk_id
+                WHERE e.from_entity_type = 'pillar' AND e.to_entity_type = 'pillar'
+                ORDER BY e.created_at DESC
+                LIMIT 10
+            """))).fetchall()
+            
+            for row in edge_rows:
+                edge_id = f"edge_{row.edge_id}"
+                if edge_id not in existing_chunk_ids:
+                    text_ar = row.justification_quote or row.chunk_text_ar or f"({row.relation_type}) {row.from_entity_id} → {row.to_entity_id}"
+                    ctx.evidence_packets.append({
+                        "chunk_id": edge_id,
+                        "text_ar": text_ar,
+                        "chunk_type": "cross_pillar_edge",
+                        "source": "seed_floor",
+                        "edge_id": str(row.edge_id),
+                    })
+                    existing_chunk_ids.add(edge_id)
+        except Exception as e:
+            # Edges table may not exist or have different schema - this is optional
+            logger.debug(f"Seed retrieval floor edge fetch skipped: {e}")
+        
+        # 3. For system_limits_policy, add a policy response packet
+        try:
+            intent = getattr(ctx, "intent", None) or {}
+            intent_type = str(intent.get("intent_type") or "")
+            if intent_type == "system_limits_policy":
+                policy_packet = {
+                    "chunk_id": "system_policy_response",
+                    "text_ar": (
+                        "حدود الربط في النظام:\n"
+                        "1. لا يُنشئ النظام روابط سببية بين الركائز إلا إذا وُجد نص صريح يدعمها.\n"
+                        "2. عند عدم وجود نص، يُصرّح بذلك: \"غير منصوص عليه في الإطار\".\n"
+                        "3. الروابط المُستنتجة تُوثّق بمصدرها وتُعلَّم بدرجة الثقة.\n"
+                        "4. لا يُصدر النظام أحكامًا فقهية أو طبية أو نفسية سريرية."
+                    ),
+                    "chunk_type": "system_policy",
+                    "source": "system_policy",
+                    "no_cite_required": True,
+                }
+                if policy_packet["chunk_id"] not in existing_chunk_ids:
+                    ctx.evidence_packets.insert(0, policy_packet)
+        except Exception:
+            pass
 
     async def _state_account(self, ctx: StateContext) -> MuhasibiState:
         """
@@ -462,6 +641,9 @@ class MuhasibiMiddleware:
         This state adds reflection without new claims.
         """
         await run_reflect(self, ctx)
+        # Runtime contract gate: enforce intent/coverage before FINALIZE.
+        # Reason: production must not emit safe-but-off-target answers.
+        await apply_runtime_contract_gate(middleware=self, ctx=ctx, enable_repair=True)
         return MuhasibiState.FINALIZE
 
     def _build_response(self, ctx: StateContext) -> FinalResponse:

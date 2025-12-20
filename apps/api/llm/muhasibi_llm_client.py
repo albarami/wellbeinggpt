@@ -246,6 +246,9 @@ class MuhasibiLLMClient:
         evidence_packets: list[dict[str, Any]],
         detected_entities: list[dict[str, Any]],
         mode: str = "answer",
+        used_edges: Optional[list[dict[str, Any]]] = None,
+        argument_chains: Optional[list[dict[str, Any]]] = None,
+        fallback_context: Optional[dict[str, Any]] = None,
     ) -> Optional[InterpretResult]:
         prompt_name = "interpreter.md"
         if mode == "debate":
@@ -254,6 +257,8 @@ class MuhasibiLLMClient:
             prompt_name = "interpreter_socratic_ar.md"
         elif mode == "judge":
             prompt_name = "interpreter_judge_ar.md"
+        elif mode == "natural_chat":
+            prompt_name = "interpreter_natural_chat_ar.md"
 
         system_prompt = _read_prompt(prompt_name)
         user_payload = {
@@ -261,13 +266,18 @@ class MuhasibiLLMClient:
             "evidence_packets": _sanitize_for_json(evidence_packets),
             "detected_entities": _sanitize_for_json(detected_entities),
             "mode": mode,
+            "used_edges": _sanitize_for_json(used_edges or []),
+            "argument_chains": _sanitize_for_json(argument_chains or []),
+            "fallback_context": _sanitize_for_json(fallback_context or {}),
         }
+        # Natural chat needs more tokens for flowing scholarly prose
+        tokens = 2000 if mode == "natural_chat" else 1200
         req = LLMRequest(
             system_prompt=system_prompt,
             user_message=json.dumps(user_payload, ensure_ascii=False),
             response_format=_json_schema_for_interpreter(),
-            temperature=0.2,
-            max_tokens=1200,
+            temperature=0.3 if mode == "natural_chat" else 0.2,
+            max_tokens=tokens,
         )
         resp = await self.provider.complete(req)
         if resp.error:

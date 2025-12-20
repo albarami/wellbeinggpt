@@ -1,0 +1,40 @@
+{
+  "generated_at": "2025-12-14T05:51:33.804295",
+  "doc_hash": "57b1bc3b0bdb89d8266fe831c9a3e7cab2958861ae8a3590a68d96a56feb90c4",
+  "doc_file": "docs\\source\\framework_2025-10_v1.docx",
+  "vector_backend": "bm25",
+  "counts": {
+    "pillars_expected": 5,
+    "pillars_found": 5,
+    "core_values_expected": 15,
+    "core_values_found": 15,
+    "sub_values_expected": 86,
+    "sub_values_found": 86,
+    "definition_blocks_expected": 83,
+    "definition_blocks_found": 83,
+    "evidence_blocks_expected": 360,
+    "evidence_blocks_found": 360,
+    "chunks_expected": 552,
+    "chunks_found": 552,
+    "embeddings_expected": 552,
+    "embeddings_found": 552
+  },
+  "edge_counts": {
+    "CONTAINS": 101,
+    "MENTIONS_REF": 269,
+    "REFERS_TO": 301,
+    "SAME_NAME": 11,
+    "SHARES_REF": 67,
+    "SUPPORTED_BY": 358
+  },
+  "missing": {
+    "entities": [],
+    "definitions": [],
+    "evidence": [],
+    "chunks": [],
+    "embeddings": [],
+    "graph_edges": []
+  },
+  "status": "complete",
+  "notes": []
+}

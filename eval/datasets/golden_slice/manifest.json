@@ -1,0 +1,16 @@
+{
+  "counts": {
+    "cross": 80,
+    "gold": 200,
+    "injection": 40,
+    "mixed": 60,
+    "negative": 60
+  },
+  "golden_slice_counts": {
+    "cross": 15,
+    "gold": 30,
+    "injection": 10,
+    "negative": 15
+  },
+  "seed": 1337
+}

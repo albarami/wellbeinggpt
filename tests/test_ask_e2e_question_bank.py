@@ -177,9 +177,9 @@ async def test_citations_reference_valid_chunks(require_db_and_llm, client):
     
     assert response.status_code == 200
     data = response.json()
-    
-    if data["not_found"]:
-        pytest.skip("Question returned not_found, no citations to check")
+
+    # This is a core in-scope structure question; it must not refuse when DB+LLM are configured.
+    assert data["not_found"] is False, "Unexpected refusal for in-scope structure question"
     
     # Verify each cited chunk_id exists in the database
     async with get_session() as session:
@@ -276,9 +276,9 @@ class TestClaimToEvidence:
         
         assert response.status_code == 200
         data = response.json()
-        
-        if data["not_found"]:
-            pytest.skip("Question returned not_found")
+
+        # This is an in-scope definition question; it must not refuse when DB+LLM are configured.
+        assert data["not_found"] is False, "Unexpected refusal for in-scope definition question"
         
         assert "citations" in data
         

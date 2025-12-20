@@ -131,3 +131,7 @@ async def test_definition_questions_do_not_force_hint_queries(require_db):
 
         assert len(counting.calls) == 1, f"Expected 1 retrieve call, got {counting.calls}"
 
+
+
+
+

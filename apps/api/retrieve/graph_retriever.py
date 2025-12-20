@@ -43,10 +43,12 @@ async def get_entity_neighbors(
             SELECT 
                 e.id as edge_id,
                 e.rel_type,
+                e.relation_type,
                 e.to_type as neighbor_type,
                 e.to_id as neighbor_id,
                 e.created_method,
-                e.score
+                e.score,
+                e.strength_score
             FROM edge e
             WHERE e.from_type = :entity_type
               AND e.from_id = :entity_id
@@ -57,10 +59,6 @@ async def get_entity_neighbors(
             "entity_id": entity_id,
         }
 
-        if relationship_types:
-            query += " AND e.rel_type = ANY(:rel_types)"
-            params["rel_types"] = relationship_types
-
         if status != "all":
             query += " AND e.status = :status"
             params["status"] = status
@@ -70,11 +68,13 @@ async def get_entity_neighbors(
             neighbors.append({
                 "edge_id": str(row.edge_id),
                 "rel_type": row.rel_type,
+                "relation_type": row.relation_type,
                 "neighbor_type": row.neighbor_type,
                 "neighbor_id": row.neighbor_id,
                 "direction": "outgoing",
                 "created_method": row.created_method,
                 "score": row.score,
+                "strength_score": row.strength_score,
             })
 
     if direction in ("incoming", "both"):
@@ -82,10 +82,12 @@ async def get_entity_neighbors(
             SELECT 
                 e.id as edge_id,
                 e.rel_type,
+                e.relation_type,
                 e.from_type as neighbor_type,
                 e.from_id as neighbor_id,
                 e.created_method,
-                e.score
+                e.score,
+                e.strength_score
             FROM edge e
             WHERE e.to_type = :entity_type
               AND e.to_id = :entity_id
@@ -96,10 +98,6 @@ async def get_entity_neighbors(
             "entity_id": entity_id,
         }
 
-        if relationship_types:
-            query += " AND e.rel_type = ANY(:rel_types)"
-            params["rel_types"] = relationship_types
-
         if status != "all":
             query += " AND e.status = :status"
             params["status"] = status
@@ -109,12 +107,58 @@ async def get_entity_neighbors(
             neighbors.append({
                 "edge_id": str(row.edge_id),
                 "rel_type": row.rel_type,
+                "relation_type": row.relation_type,
                 "neighbor_type": row.neighbor_type,
                 "neighbor_id": row.neighbor_id,
                 "direction": "incoming",
                 "created_method": row.created_method,
                 "score": row.score,
+                "strength_score": row.strength_score,
             })
+
+    # Apply relationship type filtering in Python for asyncpg stability.
+    # Reason: array typing for `ANY(:rel_types)` is brittle across drivers.
+    if relationship_types:
+        allowed = set([str(x) for x in relationship_types if str(x)])
+        neighbors = [n for n in neighbors if str(n.get("rel_type") or "") in allowed]
+
+    # Attach edge-level justification spans (best-effort; table may not exist in older DBs).
+    try:
+        edge_ids = [n.get("edge_id") for n in neighbors if n.get("edge_id")]
+        edge_ids = [str(eid) for eid in edge_ids if str(eid)]
+        if edge_ids:
+            span_rows = (
+                await session.execute(
+                    text(
+                        """
+                        SELECT edge_id::text AS edge_id, chunk_id, span_start, span_end, quote
+                        FROM edge_justification_span
+                        WHERE edge_id::text = ANY(:eids)
+                        ORDER BY edge_id, chunk_id, span_start
+                        """
+                    ),
+                    {"eids": edge_ids},
+                )
+            ).fetchall()
+            spans_by_edge: dict[str, list[dict[str, Any]]] = {}
+            for r in span_rows:
+                spans_by_edge.setdefault(str(r.edge_id), []).append(
+                    {
+                        "chunk_id": str(r.chunk_id),
+                        "span_start": int(r.span_start),
+                        "span_end": int(r.span_end),
+                        "quote": str(r.quote),
+                    }
+                )
+            for n in neighbors:
+                eid = str(n.get("edge_id") or "")
+                n["justification_spans"] = spans_by_edge.get(eid, [])
+        else:
+            for n in neighbors:
+                n["justification_spans"] = []
+    except Exception:
+        for n in neighbors:
+            n["justification_spans"] = []
 
     return neighbors
 

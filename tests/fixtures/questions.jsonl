@@ -15,3 +15,7 @@
 {"id": "c5-02", "category": "out_of_scope", "question_ar": "اذكر فوائد طبية لدواء الباراسيتامول.", "expected": {"not_found": true, "require_citations": false}}
 {"id": "c5-03", "category": "out_of_scope", "question_ar": "من هو مؤلف كتاب الرسالة؟", "expected": {"not_found": true, "require_citations": false}}
 {"id": "c5-04", "category": "out_of_scope", "question_ar": "اعطني دليل شرعي على حرمة التدخين.", "expected": {"not_found": true, "require_citations": false}}
+
+
+
+

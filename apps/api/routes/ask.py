@@ -19,6 +19,134 @@ from apps.api.retrieve.hybrid_retriever import HybridRetriever
 
 router = APIRouter()
 
+async def _build_runtime_components(session) -> tuple[EntityResolver, Guardrails, HybridRetriever]:
+    """
+    Build resolver/guardrails/retriever bound to the current DB session.
+
+    Reason: /ask, /ask/trace, and /ask/ui must share the exact same runtime setup.
+    """
+    resolver = EntityResolver()
+    try:
+        pillars = (await session.execute(text("SELECT id, name_ar FROM pillar"))).fetchall()
+        core_values = (await session.execute(text("SELECT id, name_ar FROM core_value"))).fetchall()
+        sub_values = (await session.execute(text("SELECT id, name_ar FROM sub_value"))).fetchall()
+        resolver.load_entities(
+            pillars=[{"id": str(r.id), "name_ar": r.name_ar} for r in pillars],
+            core_values=[{"id": str(r.id), "name_ar": r.name_ar} for r in core_values],
+            sub_values=[{"id": str(r.id), "name_ar": r.name_ar} for r in sub_values],
+            aliases_path="data/static/aliases_ar.json",
+        )
+    except Exception:
+        # DB may be unavailable in some dev contexts; proceed with empty resolver.
+        pass
+
+    guardrails = Guardrails()
+
+    retriever = HybridRetriever()
+    # Attach session for middleware retrieval (keeps middleware signature stable for tests)
+    retriever._session = session  # type: ignore[attr-defined]
+
+    return resolver, guardrails, retriever
+
+
+def _build_llm_client_or_none(model_deployment: Optional[str] = None) -> Optional[MuhasibiLLMClient]:
+    """
+    Build the LLM client if configured, otherwise None.
+
+    Args:
+        model_deployment: Optional deployment name override (gpt-5-chat, gpt-5.1, gpt-5.2)
+
+    Reason: keep runtime behavior identical across /ask and /ask/ui.
+    """
+    llm_client = None
+    try:
+        cfg = ProviderConfig.from_env()
+        # Override deployment if specified
+        if model_deployment:
+            cfg = ProviderConfig(
+                provider_type=cfg.provider_type,
+                endpoint=cfg.endpoint,
+                api_key=cfg.api_key,
+                api_version=cfg.api_version,
+                deployment_name=model_deployment,  # Use the override
+                model_name=cfg.model_name,
+                max_tokens=cfg.max_tokens,
+                temperature=cfg.temperature,
+                timeout=cfg.timeout,
+            )
+        import logging
+
+        logging.getLogger(__name__).info(
+            f"[ASK] LLM configured: {cfg.is_configured()}, deployment: {cfg.deployment_name}, endpoint: {cfg.endpoint[:50] if cfg.endpoint else 'None'}"
+        )
+        if cfg.is_configured():
+            provider = create_provider(cfg)
+            llm_client = MuhasibiLLMClient(provider)
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).error(f"[ASK] LLM setup failed: {e}")
+        llm_client = None
+    return llm_client
+
+
+async def _execute_ask_request(
+    *,
+    session,
+    request: "AskRequest",
+    with_trace: bool,
+) -> tuple[FinalResponse, list[dict], Optional[object]]:
+    """
+    Execute the ask pipeline using the shared runtime components.
+
+    Contract:
+    - This is the single shared code path used by /ask, /ask/trace, and /ask/ui.
+    - /ask/ui is allowed to add metadata extraction and persistence AFTER this call.
+    """
+    from apps.api.core.baseline_answer import generate_baseline_answer
+
+    resolver, guardrails, retriever = await _build_runtime_components(session)
+
+    # Use baseline mode if requested
+    if request.engine == "baseline":
+        final = await generate_baseline_answer(
+            question=request.question,
+            retriever=retriever,
+            resolver=resolver,
+            guardrails=guardrails,
+            language=request.language,
+        )
+        final = _fail_closed_if_invalid(final)
+        return final, [], None
+
+    llm_client = _build_llm_client_or_none(model_deployment=request.model_deployment)
+    middleware = create_middleware(
+        entity_resolver=resolver,
+        retriever=retriever,
+        llm_client=llm_client,  # uses Azure/OpenAI if configured; else deterministic fallback
+        guardrails=guardrails,
+    )
+
+    if with_trace:
+        final, trace = await middleware.process_with_trace(
+            request.question, language=request.language, mode=request.mode
+        )
+        final = _fail_closed_if_invalid(final)
+        return final, trace, middleware
+
+    final = await middleware.process(request.question, language=request.language, mode=request.mode)
+
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.info(
+        f"[ASK] Before fail_closed: not_found={final.not_found}, citations={len(final.citations)}, answer_len={len(final.answer_ar)}"
+    )
+
+    final = _fail_closed_if_invalid(final)
+    return final, [], middleware
+
+
 def _fail_closed_if_invalid(final: FinalResponse) -> FinalResponse:
     """
     Fail closed for enterprise safety.
@@ -68,6 +196,14 @@ class AskRequest(BaseModel):
     engine: str = Field(
         default="muhasibi",
         description="muhasibi|baseline - reasoning engine to use",
+    )
+    model_deployment: Optional[str] = Field(
+        default=None,
+        description="Override Azure deployment name (gpt-5-chat, gpt-5.1, gpt-5.2)",
+    )
+    reranker_enabled: Optional[bool] = Field(
+        default=None,
+        description="Override reranker setting (None=use env default, True=force on, False=force off)",
     )
 
 
@@ -205,70 +341,9 @@ async def ask_question(request: AskRequest):
     Returns:
         AskResponse: Answer with citations, or refusal if no evidence.
     """
-    from apps.api.core.baseline_answer import generate_baseline_answer
-
     async with get_session() as session:
-        # Build resolver from DB (best-effort; if DB empty this remains empty and system will refuse)
-        resolver = EntityResolver()
-        try:
-            pillars = (await session.execute(text("SELECT id, name_ar FROM pillar"))).fetchall()
-            core_values = (await session.execute(text("SELECT id, name_ar FROM core_value"))).fetchall()
-            sub_values = (await session.execute(text("SELECT id, name_ar FROM sub_value"))).fetchall()
-            resolver.load_entities(
-                pillars=[{"id": str(r.id), "name_ar": r.name_ar} for r in pillars],
-                core_values=[{"id": str(r.id), "name_ar": r.name_ar} for r in core_values],
-                sub_values=[{"id": str(r.id), "name_ar": r.name_ar} for r in sub_values],
-                aliases_path="data/static/aliases_ar.json",
-            )
-        except Exception:
-            # DB may be unavailable in some dev contexts; proceed with empty resolver
-            pass
-
-        guardrails = Guardrails()
-
-        retriever = HybridRetriever()
-        # Attach session for middleware retrieval (keeps middleware signature stable for tests)
-        retriever._session = session  # type: ignore[attr-defined]
-
-        # Use baseline mode if requested
-        if request.engine == "baseline":
-            final = await generate_baseline_answer(
-                question=request.question,
-                retriever=retriever,
-                resolver=resolver,
-                guardrails=guardrails,
-                language=request.language,
-            )
-            return _fail_closed_if_invalid(final)
-
-        # Default: Muhasibi mode
-        llm_client = None
-        try:
-            cfg = ProviderConfig.from_env()
-            import logging
-            logging.getLogger(__name__).info(f"[ASK] LLM configured: {cfg.is_configured()}, endpoint: {cfg.endpoint[:50] if cfg.endpoint else 'None'}")
-            if cfg.is_configured():
-                provider = create_provider(cfg)
-                llm_client = MuhasibiLLMClient(provider)
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).error(f"[ASK] LLM setup failed: {e}")
-            llm_client = None
-
-        middleware = create_middleware(
-            entity_resolver=resolver,
-            retriever=retriever,
-            llm_client=llm_client,  # uses Azure/OpenAI if configured; else deterministic fallback
-            guardrails=guardrails,
-        )
-
-        final = await middleware.process(request.question, language=request.language, mode=request.mode)
-        
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"[ASK] Before fail_closed: not_found={final.not_found}, citations={len(final.citations)}, answer_len={len(final.answer_ar)}")
-        
-        return _fail_closed_if_invalid(final)
+        final, _, _ = await _execute_ask_request(session=session, request=request, with_trace=False)
+        return final
 
 
 @router.post("/ask/trace", response_model=AskTraceResponse)
@@ -276,58 +351,8 @@ async def ask_question_with_trace(request: AskRequest):
     """
     Ask a question and return a safe Muḥāsibī trace (state flow + timings).
     """
-    from apps.api.core.baseline_answer import generate_baseline_answer
-
     async with get_session() as session:
-        resolver = EntityResolver()
-        try:
-            pillars = (await session.execute(text("SELECT id, name_ar FROM pillar"))).fetchall()
-            core_values = (await session.execute(text("SELECT id, name_ar FROM core_value"))).fetchall()
-            sub_values = (await session.execute(text("SELECT id, name_ar FROM sub_value"))).fetchall()
-            resolver.load_entities(
-                pillars=[{"id": str(r.id), "name_ar": r.name_ar} for r in pillars],
-                core_values=[{"id": str(r.id), "name_ar": r.name_ar} for r in core_values],
-                sub_values=[{"id": str(r.id), "name_ar": r.name_ar} for r in sub_values],
-                aliases_path="data/static/aliases_ar.json",
-            )
-        except Exception:
-            pass
-
-        guardrails = Guardrails()
-        retriever = HybridRetriever()
-        retriever._session = session  # type: ignore[attr-defined]
-
-        if request.engine == "baseline":
-            final = await generate_baseline_answer(
-                question=request.question,
-                retriever=retriever,
-                resolver=resolver,
-                guardrails=guardrails,
-                language=request.language,
-            )
-            final = _fail_closed_if_invalid(final)
-            return AskTraceResponse(final_response=final, trace=[])
-
-        llm_client = None
-        try:
-            cfg = ProviderConfig.from_env()
-            if cfg.is_configured():
-                provider = create_provider(cfg)
-                llm_client = MuhasibiLLMClient(provider)
-        except Exception:
-            llm_client = None
-
-        middleware = create_middleware(
-            entity_resolver=resolver,
-            retriever=retriever,
-            llm_client=llm_client,
-            guardrails=guardrails,
-        )
-
-        final, trace = await middleware.process_with_trace(
-            request.question, language=request.language, mode=request.mode
-        )
-        final = _fail_closed_if_invalid(final)
+        final, trace, _ = await _execute_ask_request(session=session, request=request, with_trace=True)
         return AskTraceResponse(final_response=final, trace=[TraceEvent(**t) for t in trace])
 
 

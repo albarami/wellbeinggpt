@@ -1,0 +1,158 @@
+{
+  "modes": {
+    "FULL_SYSTEM": {
+      "graph": {
+        "cross_pillar_hit_rate": 1.0,
+        "explanation_grounded_rate": 1.0,
+        "path_valid_rate": 1.0
+      },
+      "grounding": {
+        "abstained": 31,
+        "abstention_precision": 0.0,
+        "abstention_recall": 1.0,
+        "answered": 169,
+        "citation_validity_errors": 0,
+        "expected_abstain": 0,
+        "expected_answer": 200,
+        "false_abstention_rate": 0.155,
+        "false_answer_rate": 0.0,
+        "total_claims": 789,
+        "unsupported_claim_rate": 0.0,
+        "unsupported_claims": 0
+      },
+      "policy_audit": {
+        "audited_sentences": 789,
+        "examples": [],
+        "violation_rate": 0.0,
+        "violations": 0,
+        "violations_by_reason": {}
+      },
+      "retrieval": {
+        "mrr": 0.4120436507936505,
+        "recall_at_k": 0.85
+      },
+      "rubric": {
+        "average_score": 4.175
+      }
+    },
+    "LLM_ONLY_SAFE": {
+      "graph": {
+        "cross_pillar_hit_rate": 1.0,
+        "explanation_grounded_rate": 1.0,
+        "path_valid_rate": 1.0
+      },
+      "grounding": {
+        "abstained": 200,
+        "abstention_precision": 0.0,
+        "abstention_recall": 1.0,
+        "answered": 0,
+        "citation_validity_errors": 0,
+        "expected_abstain": 0,
+        "expected_answer": 200,
+        "false_abstention_rate": 1.0,
+        "false_answer_rate": 0.0,
+        "total_claims": 0,
+        "unsupported_claim_rate": 0.0,
+        "unsupported_claims": 0
+      },
+      "policy_audit": {
+        "audited_sentences": 0,
+        "examples": [],
+        "violation_rate": 0.0,
+        "violations": 0,
+        "violations_by_reason": {}
+      },
+      "retrieval": {
+        "mrr": 0.0,
+        "recall_at_k": 0.0
+      },
+      "rubric": {
+        "average_score": 0.0
+      }
+    },
+    "RAG_ONLY": {
+      "graph": {
+        "cross_pillar_hit_rate": 1.0,
+        "explanation_grounded_rate": 1.0,
+        "path_valid_rate": 1.0
+      },
+      "grounding": {
+        "abstained": 24,
+        "abstention_precision": 0.0,
+        "abstention_recall": 1.0,
+        "answered": 176,
+        "citation_validity_errors": 0,
+        "expected_abstain": 0,
+        "expected_answer": 200,
+        "false_abstention_rate": 0.12,
+        "false_answer_rate": 0.0,
+        "total_claims": 997,
+        "unsupported_claim_rate": 0.0,
+        "unsupported_claims": 0
+      },
+      "policy_audit": {
+        "audited_sentences": 871,
+        "examples": [],
+        "violation_rate": 0.0,
+        "violations": 0,
+        "violations_by_reason": {}
+      },
+      "retrieval": {
+        "mrr": 0.4220436507936504,
+        "recall_at_k": 0.85
+      },
+      "rubric": {
+        "average_score": 3.89
+      }
+    },
+    "RAG_PLUS_GRAPH": {
+      "graph": {
+        "cross_pillar_hit_rate": 1.0,
+        "explanation_grounded_rate": 1.0,
+        "path_valid_rate": 1.0
+      },
+      "grounding": {
+        "abstained": 24,
+        "abstention_precision": 0.0,
+        "abstention_recall": 1.0,
+        "answered": 176,
+        "citation_validity_errors": 0,
+        "expected_abstain": 0,
+        "expected_answer": 200,
+        "false_abstention_rate": 0.12,
+        "false_answer_rate": 0.0,
+        "total_claims": 1024,
+        "unsupported_claim_rate": 0.0,
+        "unsupported_claims": 0
+      },
+      "policy_audit": {
+        "audited_sentences": 898,
+        "examples": [],
+        "violation_rate": 0.0,
+        "violations": 0,
+        "violations_by_reason": {}
+      },
+      "retrieval": {
+        "mrr": 0.4220436507936504,
+        "recall_at_k": 0.85
+      },
+      "rubric": {
+        "average_score": 3.76
+      }
+    }
+  },
+  "run_id": "wellbeing__v1__b16833971f61__seed1337__pv1",
+  "uplift": {
+    "cross_pillar_hit_delta": null,
+    "rubric_score_delta": {
+      "ci_high": 0.615,
+      "ci_low": 0.205,
+      "mean_delta": 0.415
+    },
+    "unsupported_claim_rate_delta": {
+      "ci_high": 0.0,
+      "ci_low": 0.0,
+      "mean_delta": 0.0
+    }
+  }
+}

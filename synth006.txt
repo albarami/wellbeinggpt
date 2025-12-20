@@ -1,0 +1,9 @@
+{
+  "id": "synth-006",
+  "question_ar": "ما المنظور الكلي للإطار؟",
+  "type": "global_synthesis",
+  "category": "synthesis",
+  "answer_requirements": {},
+  "expect_abstain": false,
+  "regression_reason": "Unexpected fail on: gpt-5-chat"
+}

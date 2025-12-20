@@ -28,8 +28,10 @@ def pytest_configure(config):
                     key, _, value = line.partition("=")
                     key = key.strip()
                     value = value.strip()
-                    # Don't override existing env vars
-                    if key and key not in os.environ:
+                    # Don't override existing env vars unless they are empty.
+                    # Reason: in some environments keys may exist but be blank, which previously
+                    # caused .env loading to silently do nothing and made LLM tests skip.
+                    if key and (key not in os.environ or not (os.environ.get(key) or "").strip()):
                         os.environ[key] = value
         
         # Always enable DB tests when .env is loaded
@@ -58,7 +60,10 @@ def pytest_configure(config):
 
             from apps.api.ingest.pipeline_framework import ingest_framework_docx
             from apps.api.ingest.loader import load_canonical_json_to_db
+            from apps.api.ingest.chunk_span_store import populate_chunk_spans_for_source
+            from apps.api.ingest.scholar_notes_loader import ingest_scholar_notes_jsonl
             from apps.api.core.database import get_session
+            from apps.api.core.schema_bootstrap import bootstrap_db
 
             docx = _Path("docs/source/framework_2025-10_v1.docx")
             if docx.exists():
@@ -75,13 +80,41 @@ def pytest_configure(config):
                 canonical = _json.loads(canon_path.read_text(encoding="utf-8"))
 
                 async def _load():
+                    # Ensure schema matches current code (adds new columns/tables deterministically).
+                    await bootstrap_db()
                     async with get_session() as session:
-                        await load_canonical_json_to_db(session, canonical, docx.name)
+                        summary = await load_canonical_json_to_db(session, canonical, docx.name)
+                        # Best-effort: persist deterministic spans for stable citations.
+                        try:
+                            sd = str((summary or {}).get("source_doc_id") or "")
+                            if sd:
+                                await populate_chunk_spans_for_source(session, sd)
+                        except Exception:
+                            pass
+
+                        # Commit framework ingestion before generating scholar notes.
+                        # Reason: note generation opens a new session and must see chunks.
+                        await session.commit()
+
+                        # Ingest scholar notes pack if present (required for deep-mode evaluation).
+                        notes_path = _Path("data/scholar_notes/notes_v1.jsonl")
+                        if notes_path.exists() and notes_path.stat().st_size > 0:
+                            # Regenerate a deterministic starter pack from the current DB so chunk_ids match.
+                            from scripts.generate_scholar_notes_v1 import _run as _gen_notes  # type: ignore
+
+                            await _gen_notes(out_path=notes_path, limit=12, version="v1")
+                            await ingest_scholar_notes_jsonl(
+                                session=session,
+                                notes_jsonl_path=str(notes_path),
+                                pack_name="scholar_notes_v1",
+                            )
+
+                        await session.commit()
 
                 asyncio.run(_load())
         except Exception:
-            # Tests should still run; DB-dependent ones may skip/fail accordingly.
-            pass
+            # Reason: RUN_DB_TESTS=1 is an explicit opt-in; failures should be loud.
+            raise
 
 
 @pytest.fixture

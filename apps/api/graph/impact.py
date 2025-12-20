@@ -169,3 +169,7 @@ async def impact_propagation(
     return {"seed": {"entity_type": entity_type, "entity_id": entity_id}, "items": items[:top_k]}
 
 
+
+
+
+

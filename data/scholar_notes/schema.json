@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "wellbeing://data/scholar_notes/schema.json",
+  "title": "Scholar Notes Pack Schema",
+  "type": "object",
+  "required": [
+    "note_id",
+    "pillar_id",
+    "core_value_id",
+    "sub_value_id",
+    "title_ar",
+    "definition_ar",
+    "deep_explanation_ar",
+    "cross_pillar_links",
+    "applied_scenarios",
+    "common_misunderstandings",
+    "evidence_spans",
+    "tags",
+    "version"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "note_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "pillar_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "core_value_id": {
+      "type": ["string", "null"]
+    },
+    "sub_value_id": {
+      "type": ["string", "null"]
+    },
+    "title_ar": {
+      "type": "string",
+      "minLength": 1
+    },
+    "definition_ar": {
+      "type": "string",
+      "minLength": 0,
+      "description": "May be empty only if no bindable definition evidence exists; then ingestion must refuse to create a definition chunk."
+    },
+    "deep_explanation_ar": {
+      "type": "string",
+      "minLength": 0,
+      "description": "May be empty if bindable-only synthesis collapses; do not fill with boilerplate."
+    },
+    "cross_pillar_links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "target_pillar_id",
+          "target_sub_value_id",
+          "relation_type",
+          "justification_ar"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "target_pillar_id": {"type": "string", "minLength": 1},
+          "target_sub_value_id": {"type": ["string", "null"]},
+          "relation_type": {"$ref": "#/$defs/relation_type"},
+          "justification_ar": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Must be bindable to evidence spans; no uncited linking rationale."
+          }
+        }
+      },
+      "default": []
+    },
+    "applied_scenarios": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["scenario_ar", "analysis_ar"],
+        "additionalProperties": false,
+        "properties": {
+          "scenario_ar": {"type": "string", "minLength": 1},
+          "analysis_ar": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Must be bindable; if not, omit this scenario rather than filling."
+          }
+        }
+      },
+      "default": []
+    },
+    "common_misunderstandings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["misunderstanding_ar", "correction_ar"],
+        "additionalProperties": false,
+        "properties": {
+          "misunderstanding_ar": {"type": "string", "minLength": 1},
+          "correction_ar": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Must be bindable; if not, omit this misunderstanding rather than filling."
+          }
+        }
+      },
+      "default": []
+    },
+    "evidence_spans": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/evidence_span"}
+    },
+    "tags": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "default": []
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^v\\d+$"
+    }
+  },
+  "$defs": {
+    "relation_type": {
+      "type": "string",
+      "enum": [
+        "COMPLEMENTS",
+        "ENABLES",
+        "REINFORCES",
+        "CONDITIONAL_ON",
+        "TENSION_WITH",
+        "RESOLVES_WITH",
+        "EXEMPLIFIES",
+        "PARALLEL_TO"
+      ]
+    },
+    "evidence_span": {
+      "type": "object",
+      "required": ["source_id", "chunk_id", "span_start", "span_end", "quote"],
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Source document id or logical source key; must be in source_inventory."
+        },
+        "chunk_id": {"type": "string", "minLength": 1},
+        "span_start": {"type": "integer", "minimum": 0},
+        "span_end": {"type": "integer", "minimum": 0},
+        "quote": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

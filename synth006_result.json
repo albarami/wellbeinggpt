@@ -1,0 +1,9 @@
+{
+  "status_code": 200,
+  "contract_outcome": "PASS_FULL",
+  "abstained": false,
+  "citations_count": 5,
+  "used_edges_count": 0,
+  "answer_length": 210,
+  "abstain_reason": null
+}

@@ -76,9 +76,8 @@ async def test_network_returns_nodes_and_edges(require_db, client):
         sv_row = (await session.execute(
             text("SELECT name_ar FROM sub_value LIMIT 1")
         )).fetchone()
-    
-    if not sv_row:
-        pytest.skip("No sub_value found")
+
+    assert sv_row is not None, "Expected at least one sub_value in DB"
     
     response = await client.get(
         "/graph/network",
@@ -116,9 +115,8 @@ async def test_ref_coverage_returns_entities_and_pillars(require_db, client):
                 LIMIT 1
             """)
         )).fetchone()
-    
-    if not ref_row:
-        pytest.skip("No ref node found")
+
+    assert ref_row is not None, "Expected at least one ref node in DB"
     
     response = await client.get(f"/graph/ref/{ref_row.ref_id}/coverage")
     

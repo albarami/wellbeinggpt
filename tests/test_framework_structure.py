@@ -326,3 +326,7 @@ class TestCrossValueDetection:
         
         sabr = find_entity_by_name_partial(all_sub_values, "الصبر")
         assert sabr is not None, "الصبر (patience) should exist as a sub-value"
+
+
+
+

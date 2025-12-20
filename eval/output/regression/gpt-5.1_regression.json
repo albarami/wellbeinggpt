@@ -1,0 +1,111 @@
+{
+  "timestamp": "2025-12-20T03:44:27.023399",
+  "dataset": "D:\\wellbeingqa\\eval\\datasets\\regression_unexpected_fails.jsonl",
+  "deployment": "gpt-5.1",
+  "total": 10,
+  "passed": 10,
+  "failed": 0,
+  "pass_rate": 1.0,
+  "results": [
+    {
+      "id": "synth-006",
+      "type": "global_synthesis",
+      "mode_used": "answer",
+      "contract_outcome": "PASS_FULL",
+      "citations_count": 5,
+      "edges_count": 0,
+      "abstained": false,
+      "success": true
+    },
+    {
+      "id": "bound-009",
+      "type": "boundaries",
+      "mode_used": "answer",
+      "contract_outcome": "PASS_FULL",
+      "citations_count": 5,
+      "edges_count": 0,
+      "abstained": false,
+      "success": true
+    },
+    {
+      "id": "chat-011",
+      "type": "natural_chat",
+      "mode_used": "natural_chat",
+      "contract_outcome": "PASS_FULL",
+      "citations_count": 5,
+      "edges_count": 0,
+      "abstained": false,
+      "success": true
+    },
+    {
+      "id": "chat-019",
+      "type": "natural_chat",
+      "mode_used": "natural_chat",
+      "contract_outcome": "PASS_FULL",
+      "citations_count": 10,
+      "edges_count": 0,
+      "abstained": false,
+      "success": true
+    },
+    {
+      "id": "synth-034",
+      "type": "global_synthesis",
+      "mode_used": "answer",
+      "contract_outcome": "PASS_FULL",
+      "citations_count": 5,
+      "edges_count": 0,
+      "abstained": false,
+      "success": true
+    },
+    {
+      "id": "synth-039",
+      "type": "global_synthesis",
+      "mode_used": "answer",
+      "contract_outcome": "PASS_FULL",
+      "citations_count": 13,
+      "edges_count": 4,
+      "abstained": false,
+      "success": true
+    },
+    {
+      "id": "cross-001",
+      "type": "cross_pillar",
+      "mode_used": "answer",
+      "contract_outcome": "PASS_FULL",
+      "citations_count": 14,
+      "edges_count": 12,
+      "abstained": false,
+      "success": true
+    },
+    {
+      "id": "cross-033",
+      "type": "cross_pillar",
+      "mode_used": "answer",
+      "contract_outcome": "PASS_FULL",
+      "citations_count": 15,
+      "edges_count": 12,
+      "abstained": false,
+      "success": true
+    },
+    {
+      "id": "bound-018",
+      "type": "boundaries",
+      "mode_used": "answer",
+      "contract_outcome": "PASS_FULL",
+      "citations_count": 5,
+      "edges_count": 0,
+      "abstained": false,
+      "success": true
+    },
+    {
+      "id": "chat-002",
+      "type": "natural_chat",
+      "mode_used": "natural_chat",
+      "contract_outcome": "PASS_FULL",
+      "citations_count": 5,
+      "edges_count": 12,
+      "abstained": false,
+      "success": true
+    }
+  ]
+}

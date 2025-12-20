@@ -60,3 +60,7 @@ async def test_retrieve_uses_llm_query_rewrite_when_empty(monkeypatch):
     assert any(p.get("chunk_id") == "CH_X" for p in ctx.evidence_packets)
 
 
+
+
+
+

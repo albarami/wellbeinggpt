@@ -11,6 +11,7 @@ Returns Evidence Packets (contract) via MergeRanker.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -21,6 +22,7 @@ from apps.api.retrieve.merge_rank import MergeRanker, MergeResult
 from apps.api.retrieve.sql_retriever import get_chunks_with_refs
 from apps.api.retrieve.graph_retriever import expand_graph
 from apps.api.retrieve.vector_retriever import VectorRetriever
+from apps.api.retrieve.reranker import Reranker, create_reranker_from_env
 
 
 @dataclass
@@ -40,11 +42,13 @@ class HybridRetriever:
         self,
         merge_ranker: Optional[MergeRanker] = None,
         vector_retriever: Optional[VectorRetriever] = None,
+        reranker: Optional[Reranker] = None,
         enable_vector: bool = True,
         enable_graph: bool = True,
     ):
         self.merge_ranker = merge_ranker or MergeRanker(max_packets=25)
         self.vector_retriever = vector_retriever or VectorRetriever()
+        self.reranker: Reranker = reranker or create_reranker_from_env()
         self.enable_vector = enable_vector
         self.enable_graph = enable_graph
 
@@ -100,7 +104,15 @@ class HybridRetriever:
                 entity_type="ref",
                 entity_id=rid,
                 depth=depth,
-                relationship_types=["MENTIONS_REF", "REFERS_TO", "SHARES_REF", "SAME_NAME", "CONTAINS", "SUPPORTED_BY"],
+                    relationship_types=[
+                        "MENTIONS_REF",
+                        "REFERS_TO",
+                        "SHARES_REF",
+                        "SAME_NAME",
+                        "CONTAINS",
+                        "SUPPORTED_BY",
+                        "SCHOLAR_LINK",
+                    ],
             )
             for n in neighbors:
                 n_type = n.get("neighbor_type")
@@ -123,6 +135,7 @@ class HybridRetriever:
         self,
         session: AsyncSession,
         inputs: RetrievalInputs,
+        reranker_override: Optional[bool] = None,
     ) -> MergeResult:
         """
         Retrieve evidence packets using all enabled sources.
@@ -166,6 +179,7 @@ class HybridRetriever:
                         "MENTIONS_REF",
                         "REFERS_TO",
                         "SAME_NAME",
+                        "SCHOLAR_LINK",
                     ],
                 )
                 for n in neighbors:
@@ -244,6 +258,7 @@ class HybridRetriever:
                         "MENTIONS_REF",
                         "REFERS_TO",
                         "SAME_NAME",
+                        "SCHOLAR_LINK",
                     ],
                 )
                 for n in neighbors:
@@ -261,11 +276,56 @@ class HybridRetriever:
                         p["via_entity"] = ent["id"]
                     graph_results.extend(packets)
 
-        return self.merge_ranker.merge(
+        merged = self.merge_ranker.merge(
             sql_results=sql_results,
             vector_results=vector_results,
             graph_results=graph_results,
             resolved_entities=inputs.resolved_entities,
         )
+
+        # Optional reranker pass (top-N reordering).
+        # reranker_override: None=use default, True=force on, False=force off
+        try:
+            use_reranker = self.reranker.is_enabled() if reranker_override is None else reranker_override
+            if self.reranker and use_reranker and merged.evidence_packets:
+                alpha = float(os.getenv("RERANKER_ALPHA", "0.25") or 0.25)
+                alpha = max(0.0, min(alpha, 1.0))
+                # Build lookup from chunk_id -> base score/backends.
+                base_by_id = {str(rc.get("chunk_id") or ""): float(rc.get("score") or 0.0) for rc in (merged.ranked_chunks or [])}
+                sources_by_id = {str(rc.get("chunk_id") or ""): list(rc.get("sources") or []) for rc in (merged.ranked_chunks or [])}
+                backend_by_id = {str(rc.get("chunk_id") or ""): str(rc.get("backend") or "") for rc in (merged.ranked_chunks or [])}
+                scored = []
+                for p in merged.evidence_packets:
+                    cid = str(p.get("chunk_id") or "")
+                    base = float(base_by_id.get(cid, 0.0))
+                    rr = float(self.reranker.score(inputs.query, str(p.get("text_ar") or "")))
+                    combo = (1.0 - alpha) * base + alpha * rr
+                    scored.append((combo, rr, cid, p))
+                scored.sort(key=lambda x: x[0], reverse=True)
+                merged.evidence_packets = [x[3] for x in scored]
+                # Rebuild ranked_chunks deterministically from reranked list.
+                new_ranked = []
+                for i, (combo, rr, cid, p) in enumerate(scored, start=1):
+                    new_ranked.append(
+                        {
+                            "rank": i,
+                            "chunk_id": cid,
+                            "score": float(combo),
+                            "reranker_score": float(rr),
+                            "sources": sources_by_id.get(cid, []),
+                            "backend": backend_by_id.get(cid, str(p.get("backend") or "")),
+                        }
+                    )
+                merged.ranked_chunks = new_ranked
+        except Exception:
+            pass
+        # For eval/observability: store last merge result on the instance.
+        # Reason: runner/scorers need deterministic retrieval traces without changing
+        # the public middleware API.
+        try:
+            self.last_merge_result = merged  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        return merged
 
 

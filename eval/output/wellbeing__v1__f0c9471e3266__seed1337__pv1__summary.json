@@ -1,0 +1,118 @@
+{
+  "modes": {
+    "FULL_SYSTEM": {
+      "graph": {
+        "cross_pillar_hit_rate": 1.0,
+        "explanation_grounded_rate": 1.0,
+        "path_valid_rate": 1.0
+      },
+      "grounding": {
+        "abstain_expected": 0,
+        "abstained": 0,
+        "abstention_precision": 1.0,
+        "citation_validity_errors": 0,
+        "false_answer_rate": 0.0,
+        "total_claims": 609,
+        "unsupported_claim_rate": 0.367816091954023,
+        "unsupported_claims": 224
+      },
+      "retrieval": {
+        "mrr": 0.04583333333333334,
+        "recall_at_k": 0.1375
+      },
+      "rubric": {
+        "average_score": 10.0
+      }
+    },
+    "LLM_ONLY_SAFE": {
+      "graph": {
+        "cross_pillar_hit_rate": 0.0,
+        "explanation_grounded_rate": 0.0,
+        "path_valid_rate": 1.0
+      },
+      "grounding": {
+        "abstain_expected": 0,
+        "abstained": 80,
+        "abstention_precision": 1.0,
+        "citation_validity_errors": 0,
+        "false_answer_rate": 0.0,
+        "total_claims": 0,
+        "unsupported_claim_rate": 0.0,
+        "unsupported_claims": 0
+      },
+      "retrieval": {
+        "mrr": 0.0,
+        "recall_at_k": 0.0
+      },
+      "rubric": {
+        "average_score": 0.0
+      }
+    },
+    "RAG_ONLY": {
+      "graph": {
+        "cross_pillar_hit_rate": 0.0,
+        "explanation_grounded_rate": 0.0,
+        "path_valid_rate": 1.0
+      },
+      "grounding": {
+        "abstain_expected": 0,
+        "abstained": 0,
+        "abstention_precision": 1.0,
+        "citation_validity_errors": 0,
+        "false_answer_rate": 0.0,
+        "total_claims": 440,
+        "unsupported_claim_rate": 0.09090909090909091,
+        "unsupported_claims": 40
+      },
+      "retrieval": {
+        "mrr": 0.04583333333333334,
+        "recall_at_k": 0.1375
+      },
+      "rubric": {
+        "average_score": 5.275
+      }
+    },
+    "RAG_PLUS_GRAPH": {
+      "graph": {
+        "cross_pillar_hit_rate": 1.0,
+        "explanation_grounded_rate": 1.0,
+        "path_valid_rate": 1.0
+      },
+      "grounding": {
+        "abstain_expected": 0,
+        "abstained": 0,
+        "abstention_precision": 1.0,
+        "citation_validity_errors": 0,
+        "false_answer_rate": 0.0,
+        "total_claims": 444,
+        "unsupported_claim_rate": 0.0990990990990991,
+        "unsupported_claims": 44
+      },
+      "retrieval": {
+        "mrr": 0.04583333333333334,
+        "recall_at_k": 0.1375
+      },
+      "rubric": {
+        "average_score": 8.275
+      }
+    }
+  },
+  "run_id": "wellbeing__v1__f0c9471e3266__seed1337__pv1",
+  "uplift": {
+    "cross_pillar_hit_delta": {
+      "ci_high": 0.0,
+      "ci_low": 0.0,
+      "mean_delta": 0.0
+    },
+    "rubric_score_delta": {
+      "ci_high": 1.875,
+      "ci_low": 1.575,
+      "mean_delta": 1.725
+    },
+    "unsupported_claim_rate_delta": {
+      "ci_high": -0.2563244047619049,
+      "ci_low": -0.27695741758241754,
+      "mean_delta": -0.2661343864468865
+    }
+  }
+}

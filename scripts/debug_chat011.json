@@ -1,0 +1,269 @@
+{
+  "request_id": "25c3ff47-5021-4b73-94ca-b5278b83aa50",
+  "latency_ms": 18911,
+  "mode_used": "natural_chat",
+  "engine_used": "muhasibi",
+  "contract_outcome": "PASS_FULL",
+  "contract_reasons": [],
+  "contract_applicable": true,
+  "abstain_reason": null,
+  "citations_spans": [
+    {
+      "chunk_id": "CH_1367196d5b87",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "userimg_9c2ae16f7ff5_ln1",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_b9e67c8abe40",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "para_739",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_8001059710ec",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "para_739",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_73528d03cca9",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "para_704",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_bc3b43ae7a6c",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "para_704",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    }
+  ],
+  "graph_trace": {
+    "used_edges": [],
+    "argument_chains": []
+  },
+  "mechanism_trace": {
+    "loops": [],
+    "interventions": [],
+    "simulation_summary": [],
+    "loops_count": 0,
+    "interventions_count": 0,
+    "covered_pillars": []
+  },
+  "muhasibi_trace": [
+    {
+      "state": "LISTEN",
+      "elapsed_s": 0.003,
+      "mode": "natural_chat",
+      "language": "ar",
+      "detected_entities_count": 0,
+      "keywords_count": 6,
+      "listen_summary_ar": "سؤال عام: أشعر بفقدان المعنى في حياتي، ماذا أفعل؟",
+      "ultimate_goal_ar": null,
+      "constraints_count": null,
+      "path_steps": null,
+      "evidence_packets_count": null,
+      "has_definition": null,
+      "has_evidence": null,
+      "not_found": null,
+      "issues": null,
+      "confidence": null,
+      "citations_count": null,
+      "reflection_added": null,
+      "done": null
+    },
+    {
+      "state": "PURPOSE",
+      "elapsed_s": 3.97174,
+      "mode": "natural_chat",
+      "language": "ar",
+      "detected_entities_count": null,
+      "keywords_count": null,
+      "listen_summary_ar": null,
+      "ultimate_goal_ar": "مساعدة السائل على فهم مشكلة فقدان المعنى في حياته، وتقديم خطوات عملية وتوجيهات مستندة إلى قيم الرفاه الإسلامي لاستعادة الشعور بالمعنى والغاية",
+      "constraints_count": 3,
+      "path_steps": null,
+      "evidence_packets_count": null,
+      "has_definition": null,
+      "has_evidence": null,
+      "not_found": null,
+      "issues": null,
+      "confidence": null,
+      "citations_count": null,
+      "reflection_added": null,
+      "done": null
+    },
+    {
+      "state": "RETRIEVE",
+      "elapsed_s": 0.480166,
+      "mode": "natural_chat",
+      "language": "ar",
+      "detected_entities_count": null,
+      "keywords_count": null,
+      "listen_summary_ar": null,
+      "ultimate_goal_ar": null,
+      "constraints_count": null,
+      "path_steps": null,
+      "evidence_packets_count": 25,
+      "has_definition": true,
+      "has_evidence": true,
+      "not_found": null,
+      "issues": null,
+      "confidence": null,
+      "citations_count": null,
+      "reflection_added": null,
+      "done": null
+    },
+    {
+      "state": "ACCOUNT",
+      "elapsed_s": 0.0,
+      "mode": "natural_chat",
+      "language": "ar",
+      "detected_entities_count": null,
+      "keywords_count": null,
+      "listen_summary_ar": null,
+      "ultimate_goal_ar": null,
+      "constraints_count": null,
+      "path_steps": null,
+      "evidence_packets_count": null,
+      "has_definition": null,
+      "has_evidence": null,
+      "not_found": false,
+      "issues": [],
+      "confidence": null,
+      "citations_count": null,
+      "reflection_added": null,
+      "done": null
+    },
+    {
+      "state": "INTERPRET",
+      "elapsed_s": 14.448399,
+      "mode": "natural_chat",
+      "language": "ar",
+      "detected_entities_count": null,
+      "keywords_count": null,
+      "listen_summary_ar": null,
+      "ultimate_goal_ar": null,
+      "constraints_count": null,
+      "path_steps": null,
+      "evidence_packets_count": null,
+      "has_definition": null,
+      "has_evidence": null,
+      "not_found": false,
+      "issues": null,
+      "confidence": "Confidence.MEDIUM",
+      "citations_count": 5,
+      "reflection_added": null,
+      "done": null
+    },
+    {
+      "state": "REFLECT",
+      "elapsed_s": 0.0,
+      "mode": "natural_chat",
+      "language": "ar",
+      "detected_entities_count": null,
+      "keywords_count": null,
+      "listen_summary_ar": null,
+      "ultimate_goal_ar": null,
+      "constraints_count": null,
+      "path_steps": null,
+      "evidence_packets_count": null,
+      "has_definition": null,
+      "has_evidence": null,
+      "not_found": null,
+      "issues": null,
+      "confidence": null,
+      "citations_count": null,
+      "reflection_added": true,
+      "done": null
+    }
+  ],
+  "truncated_fields": {},
+  "original_counts": {
+    "citations_spans": 5,
+    "used_edges": 0,
+    "argument_chains": 0
+  },
+  "final": {
+    "listen_summary_ar": "سؤال عام: أشعر بفقدان المعنى في حياتي، ماذا أفعل؟",
+    "purpose": {
+      "ultimate_goal_ar": "مساعدة السائل على فهم مشكلة فقدان المعنى في حياته، وتقديم خطوات عملية وتوجيهات مستندة إلى قيم الرفاه الإسلامي لاستعادة الشعور بالمعنى والغاية",
+      "constraints_ar": [
+        "evidence_only",
+        "cite_every_claim",
+        "refuse_if_missing"
+      ]
+    },
+    "path_plan_ar": [
+      "تحديد ما إذا كان السؤال يتعلق بالمعنى الوجودي العام أم بمواقف حياتية محددة لفقدان المعنى",
+      "البحث في الأدلة المتاحة عن مفهوم المعنى في الحياة من منظور إسلامي (مثل الغاية من الخلق، العبادة، عمارة الأرض، الإحسان، الصبر، الرضا)",
+      "استخراج النصوص أو القيم التي تتناول: الغاية من الحياة، التعامل مع الفراغ الداخلي، دور الإيمان والعمل الصالح والعلاقات في صناعة المعنى",
+      "صياغة خطوات عملية مبنية على هذه القيم (مثل: تجديد العلاقة بالله، مراجعة النية، وضع أهداف ذات مغزى، خدمة الآخرين، طلب العلم، الصحبة الصالحة) مع الاستشهاد بكل خطوة",
+      "التنبيه – إن وجدت أدلة – إلى أهمية طلب المساعدة المتخصصة (مثل استشارة مرشد نفسي أو ديني) عند استمرار الشعور بفقدان المعنى، مع الاستشهاد",
+      "إذا لم تتوفر أدلة كافية في المادة المتاحة حول بعض الجوانب (مثل الجوانب النفسية التفصيلية)، الامتناع عن التفصيل في تلك النقاط والالتزام بالرفض الجزئي وفق شرط refuse_if_missing"
+    ],
+    "answer_ar": "التعريف:\nلسان العرب (ابن منظور): الأناة: التؤدة، والأني: من الأناة والتؤدة... أنات يأني = لا تعجل. الحلم = الأناة والتثبيت (تقارب المعنى مع التؤدة). الوقار: التأني في التوجه نحو المطالب.\n\nالتأصيل/الدليل:\n\nوَالْكَاظِمِينَ الْغَيْظَ وَالْعَافِينَ عَنِ النَّاسِ\n\nخُلِقَ الإِنسَانُ مِنْ عَجَلٍ\n\nانعكاس (إرشاد عام مرتبط بالنص):\nيمكنك تحويل ما سبق إلى خطوات عملية عبر التركيز على: القيمة المذكورة في النص.\nخطوات مختصرة: ابدأ بقراءة النص المستشهد به، ثم حاول تحديد السلوك المرتبط به في واقعك، ثم دوّن تقويمًا ذاتيًا لما نجح وما يحتاج تعزيزًا.",
+    "citations": [
+      {
+        "chunk_id": "CH_1367196d5b87",
+        "source_anchor": "userimg_9c2ae16f7ff5_ln1",
+        "ref": null
+      },
+      {
+        "chunk_id": "CH_b9e67c8abe40",
+        "source_anchor": "para_739",
+        "ref": "﴿وَالْكَاظِمِينَ الْغَيْظَ وَالْعَافِينَ عَنِ النَّاسِ﴾ [آل عمران: 134]"
+      },
+      {
+        "chunk_id": "CH_8001059710ec",
+        "source_anchor": "para_739",
+        "ref": "﴿خُلِقَ الإِنسَانُ مِنْ عَجَلٍ﴾ [الأنبياء: 37]"
+      },
+      {
+        "chunk_id": "CH_73528d03cca9",
+        "source_anchor": "para_704",
+        "ref": "{وَأَن لَّيْسَ لِلْإِنسَانِ إِلَّا مَا سَعَىٰ} [النجم:39]"
+      },
+      {
+        "chunk_id": "CH_bc3b43ae7a6c",
+        "source_anchor": "para_704",
+        "ref": "﴿هُوَ الَّذِي جَعَلَ لَكُمُ الْأَرْضَ ذَلُولًا فَامْشُوا فِي مَنَاكِبِهَا وَكُلُوا مِنْ رِزْقِهِ﴾ [الملك: 15]"
+      }
+    ],
+    "entities": [],
+    "difficulty": "hard",
+    "not_found": false,
+    "confidence": "medium"
+  }
+}

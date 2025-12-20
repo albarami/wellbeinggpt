@@ -1,0 +1,13 @@
+{
+  "code_commit": "9cab9fa0e7f72bcc786d9ed0d270a33ac76a9ca0",
+  "dataset_id": "stakeholder_acceptance",
+  "dataset_sha256": "690753d4d3fb6a53961ed91a63f1e0d682e6c6eba15746b859d6cb560aa4892f",
+  "dataset_version": "v1",
+  "generated_at_utc": "2025-12-16T07:09:30+00:00",
+  "llm_deployment": "gpt-5-chat",
+  "llm_model": null,
+  "llm_provider": "azure_openai",
+  "prompts_version": "v1",
+  "run_id": "stakeholder_acceptance__v1__690753d4d3fb__seed1337__pv1",
+  "seed": 1337
+}

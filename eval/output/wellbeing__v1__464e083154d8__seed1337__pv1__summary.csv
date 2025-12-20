@@ -1,0 +1,5 @@
+graph.cross_pillar_hit_rate,graph.explanation_grounded_rate,graph.path_valid_rate,grounding.abstained,grounding.abstention_precision,grounding.abstention_recall,grounding.answered,grounding.citation_validity_errors,grounding.expected_abstain,grounding.expected_answer,grounding.false_abstention_rate,grounding.false_answer_rate,grounding.total_claims,grounding.unsupported_claim_rate,grounding.unsupported_claims,mode,policy_audit.audited_sentences,policy_audit.examples,policy_audit.violation_rate,policy_audit.violations,policy_audit.violations_by_reason,retrieval.mrr,retrieval.recall_at_k,rubric.average_score,run_id
+1.0,1.0,1.0,60,1.0,1.0,0,0,60,0,0.0,0.0,0,0.0,0,LLM_ONLY_SAFE,0,[],0.0,0,{},0.0,0.0,0.0,wellbeing__v1__464e083154d8__seed1337__pv1
+1.0,1.0,1.0,60,1.0,1.0,0,0,60,0,0.0,0.0,297,0.0,0,RAG_ONLY,0,[],0.0,0,{},0.0,0.0,0.0,wellbeing__v1__464e083154d8__seed1337__pv1
+1.0,1.0,1.0,60,1.0,1.0,0,0,60,0,0.0,0.0,303,0.0,0,RAG_PLUS_GRAPH,0,[],0.0,0,{},0.0,0.0,0.0,wellbeing__v1__464e083154d8__seed1337__pv1
+1.0,1.0,1.0,60,1.0,1.0,0,0,60,0,0.0,0.0,0,0.0,0,FULL_SYSTEM,0,[],0.0,0,{},0.0,0.0,0.0,wellbeing__v1__464e083154d8__seed1337__pv1

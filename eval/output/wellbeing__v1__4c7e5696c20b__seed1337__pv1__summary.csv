@@ -1,0 +1,5 @@
+graph.cross_pillar_hit_rate,graph.explanation_grounded_rate,graph.path_valid_rate,grounding.abstain_expected,grounding.abstained,grounding.abstention_precision,grounding.citation_validity_errors,grounding.false_answer_rate,grounding.total_claims,grounding.unsupported_claim_rate,grounding.unsupported_claims,mode,retrieval.mrr,retrieval.recall_at_k,rubric.average_score,run_id
+1.0,1.0,1.0,0,30,1.0,0,0.0,0,0.0,0,LLM_ONLY_SAFE,0.0,0.0,0.0,wellbeing__v1__4c7e5696c20b__seed1337__pv1
+1.0,1.0,1.0,0,0,1.0,0,0.0,280,0.21785714285714286,61,RAG_ONLY,0.6087301587301589,1.0,6.666666666666667,wellbeing__v1__4c7e5696c20b__seed1337__pv1
+1.0,1.0,1.0,0,0,1.0,0,0.0,226,0.13716814159292035,31,RAG_PLUS_GRAPH,0.6087301587301589,1.0,6.533333333333333,wellbeing__v1__4c7e5696c20b__seed1337__pv1
+1.0,1.0,1.0,0,0,1.0,0,0.0,898,0.8351893095768375,750,FULL_SYSTEM,0.4920634920634919,1.0,7.0,wellbeing__v1__4c7e5696c20b__seed1337__pv1

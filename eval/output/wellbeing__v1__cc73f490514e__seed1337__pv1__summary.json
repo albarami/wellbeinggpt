@@ -1,0 +1,162 @@
+{
+  "modes": {
+    "FULL_SYSTEM": {
+      "graph": {
+        "cross_pillar_hit_rate": 1.0,
+        "explanation_grounded_rate": 1.0,
+        "path_valid_rate": 1.0
+      },
+      "grounding": {
+        "abstained": 0,
+        "abstention_precision": 1.0,
+        "abstention_recall": 1.0,
+        "answered": 60,
+        "citation_validity_errors": 0,
+        "expected_abstain": 0,
+        "expected_answer": 60,
+        "false_abstention_rate": 0.0,
+        "false_answer_rate": 0.0,
+        "total_claims": 1020,
+        "unsupported_claim_rate": 0.0,
+        "unsupported_claims": 0
+      },
+      "policy_audit": {
+        "audited_sentences": 1020,
+        "examples": [],
+        "violation_rate": 0.0,
+        "violations": 0,
+        "violations_by_reason": {}
+      },
+      "retrieval": {
+        "mrr": 0.33333333333333326,
+        "recall_at_k": 1.0
+      },
+      "rubric": {
+        "average_score": 10.0
+      }
+    },
+    "LLM_ONLY_SAFE": {
+      "graph": {
+        "cross_pillar_hit_rate": 0.0,
+        "explanation_grounded_rate": 0.0,
+        "path_valid_rate": 1.0
+      },
+      "grounding": {
+        "abstained": 60,
+        "abstention_precision": 0.0,
+        "abstention_recall": 1.0,
+        "answered": 0,
+        "citation_validity_errors": 0,
+        "expected_abstain": 0,
+        "expected_answer": 60,
+        "false_abstention_rate": 1.0,
+        "false_answer_rate": 0.0,
+        "total_claims": 0,
+        "unsupported_claim_rate": 0.0,
+        "unsupported_claims": 0
+      },
+      "policy_audit": {
+        "audited_sentences": 0,
+        "examples": [],
+        "violation_rate": 0.0,
+        "violations": 0,
+        "violations_by_reason": {}
+      },
+      "retrieval": {
+        "mrr": 0.0,
+        "recall_at_k": 0.0
+      },
+      "rubric": {
+        "average_score": 0.0
+      }
+    },
+    "RAG_ONLY": {
+      "graph": {
+        "cross_pillar_hit_rate": 0.0,
+        "explanation_grounded_rate": 0.0,
+        "path_valid_rate": 1.0
+      },
+      "grounding": {
+        "abstained": 0,
+        "abstention_precision": 1.0,
+        "abstention_recall": 1.0,
+        "answered": 60,
+        "citation_validity_errors": 0,
+        "expected_abstain": 0,
+        "expected_answer": 60,
+        "false_abstention_rate": 0.0,
+        "false_answer_rate": 0.0,
+        "total_claims": 300,
+        "unsupported_claim_rate": 0.0,
+        "unsupported_claims": 0
+      },
+      "policy_audit": {
+        "audited_sentences": 300,
+        "examples": [],
+        "violation_rate": 0.0,
+        "violations": 0,
+        "violations_by_reason": {}
+      },
+      "retrieval": {
+        "mrr": 0.33333333333333326,
+        "recall_at_k": 1.0
+      },
+      "rubric": {
+        "average_score": 0.0
+      }
+    },
+    "RAG_PLUS_GRAPH": {
+      "graph": {
+        "cross_pillar_hit_rate": 1.0,
+        "explanation_grounded_rate": 1.0,
+        "path_valid_rate": 1.0
+      },
+      "grounding": {
+        "abstained": 0,
+        "abstention_precision": 1.0,
+        "abstention_recall": 1.0,
+        "answered": 60,
+        "citation_validity_errors": 0,
+        "expected_abstain": 0,
+        "expected_answer": 60,
+        "false_abstention_rate": 0.0,
+        "false_answer_rate": 0.0,
+        "total_claims": 300,
+        "unsupported_claim_rate": 0.0,
+        "unsupported_claims": 0
+      },
+      "policy_audit": {
+        "audited_sentences": 300,
+        "examples": [],
+        "violation_rate": 0.0,
+        "violations": 0,
+        "violations_by_reason": {}
+      },
+      "retrieval": {
+        "mrr": 0.33333333333333326,
+        "recall_at_k": 1.0
+      },
+      "rubric": {
+        "average_score": 0.0
+      }
+    }
+  },
+  "run_id": "wellbeing__v1__cc73f490514e__seed1337__pv1",
+  "uplift": {
+    "cross_pillar_hit_delta": {
+      "ci_high": 0.0,
+      "ci_low": 0.0,
+      "mean_delta": 0.0
+    },
+    "rubric_score_delta": {
+      "ci_high": 10.0,
+      "ci_low": 10.0,
+      "mean_delta": 10.0
+    },
+    "unsupported_claim_rate_delta": {
+      "ci_high": 0.0,
+      "ci_low": 0.0,
+      "mean_delta": 0.0
+    }
+  }
+}

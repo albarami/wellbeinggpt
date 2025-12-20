@@ -82,12 +82,74 @@ def apply_question_evidence_relevance_gate(ctx) -> None:
     except Exception:
         pass
 
-    # If we have any detected framework entities, do NOT apply lexical relevance gating.
-    # Reason: retrieval is already anchored to in-corpus entities; lexical mismatch would
-    # create false refusals for valid guidance questions (e.g., balancing work/rest).
+    # BYPASS: system_limits_policy intent (policy/methodology questions)
+    # Reason: These ask about the system's own rules, not framework content.
+    # They don't require entity matches - we answer from system policy.
+    try:
+        intent = getattr(ctx, "intent", None) or {}
+        intent_type = (intent.get("intent_type") or "").strip()
+        if intent_type == "system_limits_policy":
+            return
+        if intent.get("bypass_relevance_gate"):
+            return
+    except Exception:
+        pass
+
+    # BYPASS: guidance_framework_chat intent (broad guidance questions)
+    # Reason: These are existential/coaching questions that use pillar seeds.
+    # They don't require entity matches - we answer from pillar definitions + bridges.
+    try:
+        intent = getattr(ctx, "intent", None) or {}
+        intent_type = (intent.get("intent_type") or "").strip()
+        if intent_type == "guidance_framework_chat":
+            return
+        if intent.get("requires_seed_retrieval"):
+            return
+    except Exception:
+        pass
+
+    # BYPASS: global_synthesis, cross_pillar, network_build intents
+    # Reason: These require broad, cross-pillar reasoning and may not have specific entities.
+    try:
+        intent = getattr(ctx, "intent", None) or {}
+        intent_type = (intent.get("intent_type") or "").strip()
+        if intent_type in {
+            "global_synthesis",
+            "cross_pillar",
+            "network_build",
+            "compare",
+            "world_model",
+        }:
+            return
+    except Exception:
+        pass
+
+    # BYPASS: natural_chat mode with seed floor met
+    # Reason: natural_chat guidance questions can be answered from pillar definitions
+    # even without specific entity matches. Check if we have seed evidence.
+    try:
+        mode = getattr(ctx, "mode", "") or ""
+        if mode == "natural_chat" and len(packets) >= 5:
+            # Check if we have pillar definition seeds (at least 3)
+            pillar_seeds = [
+                p for p in packets
+                if p.get("entity_type") == "pillar" or "ركيزة" in (p.get("text_ar") or "")
+            ]
+            if len(pillar_seeds) >= 3:
+                return
+    except Exception:
+        pass
+
+    # If we have high-confidence detected framework entities, do NOT apply lexical relevance gating.
+    # Reason: retrieval is anchored to in-corpus entities; lexical mismatch would create false
+    # refusals for valid guidance questions (e.g., balancing work/rest).
+    #
+    # IMPORTANT: low-confidence matches (or noisy matches) must not bypass the out-of-scope gate,
+    # otherwise we will \"answer\" unrelated questions using random wellbeing evidence.
     try:
         det = getattr(ctx, "detected_entities", None) or []
-        if len(det) > 0:
+        high_conf = [d for d in det if float(d.get("confidence") or 0.0) >= 0.75]
+        if len(high_conf) > 0:
             return
     except Exception:
         pass

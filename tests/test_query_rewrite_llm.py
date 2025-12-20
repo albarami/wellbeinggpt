@@ -23,3 +23,7 @@ async def test_query_rewrite_ar_returns_rewrites():
     assert "rewrites_ar" in res and len(res["rewrites_ar"]) >= 1
 
 
+
+
+
+

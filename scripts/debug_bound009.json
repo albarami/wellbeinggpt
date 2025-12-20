@@ -1,0 +1,270 @@
+{
+  "request_id": "7d722fc5-a9e5-42ef-bc80-19abedf97171",
+  "latency_ms": 13132,
+  "mode_used": "answer",
+  "engine_used": "muhasibi",
+  "contract_outcome": "PASS_PARTIAL",
+  "contract_reasons": [
+    "MISSING_USED_GRAPH_EDGES"
+  ],
+  "contract_applicable": true,
+  "abstain_reason": null,
+  "citations_spans": [
+    {
+      "chunk_id": "CH_b7b03cf55177",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "para_183",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_a6f8c92a5462",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "userimg_0e71f5c6eaaf_ln3",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_e60b6298b689",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "userimg_0e71f5c6eaaf_ln3",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "system_policy_response",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": null,
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_527221070dfb",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "userimg_0e71f5c6eaaf_ln3",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    }
+  ],
+  "graph_trace": {
+    "used_edges": [],
+    "argument_chains": []
+  },
+  "mechanism_trace": {
+    "loops": [],
+    "interventions": [],
+    "simulation_summary": [],
+    "loops_count": 0,
+    "interventions_count": 0,
+    "covered_pillars": []
+  },
+  "muhasibi_trace": [
+    {
+      "state": "LISTEN",
+      "elapsed_s": 0.002001,
+      "mode": "answer",
+      "language": "ar",
+      "detected_entities_count": 0,
+      "keywords_count": 6,
+      "listen_summary_ar": "سؤال عام: ما حدود الربط بين الركائز غير المنصوص عليها؟",
+      "ultimate_goal_ar": null,
+      "constraints_count": null,
+      "path_steps": null,
+      "evidence_packets_count": null,
+      "has_definition": null,
+      "has_evidence": null,
+      "not_found": null,
+      "issues": null,
+      "confidence": null,
+      "citations_count": null,
+      "reflection_added": null,
+      "done": null
+    },
+    {
+      "state": "PURPOSE",
+      "elapsed_s": 3.564806,
+      "mode": "answer",
+      "language": "ar",
+      "detected_entities_count": null,
+      "keywords_count": null,
+      "listen_summary_ar": null,
+      "ultimate_goal_ar": "تحديد وشرح حدود الربط بين الركائز غير المنصوص عليها في منظومة القيم/الرفاه الإسلامي (أي كيف نربط بين ركائز لم يرد نص صريح بجمعها أو ترتيبها) وبيان الضوابط الشرعية لذلك",
+      "constraints_count": 3,
+      "path_steps": null,
+      "evidence_packets_count": null,
+      "has_definition": null,
+      "has_evidence": null,
+      "not_found": null,
+      "issues": null,
+      "confidence": null,
+      "citations_count": null,
+      "reflection_added": null,
+      "done": null
+    },
+    {
+      "state": "RETRIEVE",
+      "elapsed_s": 0.463425,
+      "mode": "answer",
+      "language": "ar",
+      "detected_entities_count": null,
+      "keywords_count": null,
+      "listen_summary_ar": null,
+      "ultimate_goal_ar": null,
+      "constraints_count": null,
+      "path_steps": null,
+      "evidence_packets_count": 26,
+      "has_definition": true,
+      "has_evidence": true,
+      "not_found": null,
+      "issues": null,
+      "confidence": null,
+      "citations_count": null,
+      "reflection_added": null,
+      "done": null
+    },
+    {
+      "state": "ACCOUNT",
+      "elapsed_s": 0.0,
+      "mode": "answer",
+      "language": "ar",
+      "detected_entities_count": null,
+      "keywords_count": null,
+      "listen_summary_ar": null,
+      "ultimate_goal_ar": null,
+      "constraints_count": null,
+      "path_steps": null,
+      "evidence_packets_count": null,
+      "has_definition": null,
+      "has_evidence": null,
+      "not_found": false,
+      "issues": [],
+      "confidence": null,
+      "citations_count": null,
+      "reflection_added": null,
+      "done": null
+    },
+    {
+      "state": "INTERPRET",
+      "elapsed_s": 9.092064,
+      "mode": "answer",
+      "language": "ar",
+      "detected_entities_count": null,
+      "keywords_count": null,
+      "listen_summary_ar": null,
+      "ultimate_goal_ar": null,
+      "constraints_count": null,
+      "path_steps": null,
+      "evidence_packets_count": null,
+      "has_definition": null,
+      "has_evidence": null,
+      "not_found": false,
+      "issues": null,
+      "confidence": "Confidence.MEDIUM",
+      "citations_count": 5,
+      "reflection_added": null,
+      "done": null
+    },
+    {
+      "state": "REFLECT",
+      "elapsed_s": 0.0,
+      "mode": "answer",
+      "language": "ar",
+      "detected_entities_count": null,
+      "keywords_count": null,
+      "listen_summary_ar": null,
+      "ultimate_goal_ar": null,
+      "constraints_count": null,
+      "path_steps": null,
+      "evidence_packets_count": null,
+      "has_definition": null,
+      "has_evidence": null,
+      "not_found": null,
+      "issues": null,
+      "confidence": null,
+      "citations_count": null,
+      "reflection_added": false,
+      "done": null
+    }
+  ],
+  "truncated_fields": {},
+  "original_counts": {
+    "citations_spans": 5,
+    "used_edges": 0,
+    "argument_chains": 0
+  },
+  "final": {
+    "listen_summary_ar": "سؤال عام: ما حدود الربط بين الركائز غير المنصوص عليها؟",
+    "purpose": {
+      "ultimate_goal_ar": "تحديد وشرح حدود الربط بين الركائز غير المنصوص عليها في منظومة القيم/الرفاه الإسلامي (أي كيف نربط بين ركائز لم يرد نص صريح بجمعها أو ترتيبها) وبيان الضوابط الشرعية لذلك",
+      "constraints_ar": [
+        "evidence_only",
+        "cite_every_claim",
+        "refuse_if_missing"
+      ]
+    },
+    "path_plan_ar": [
+      "تحديد المقصود بمصطلح \"الركائز غير المنصوص عليها\" في سياق الأدلة المتاحة (هل المقصود ركائز الرفاه، أو قيم، أو مقاصد فرعية)",
+      "البحث في الأدلة عن أي نصوص أو قواعد عامة تتناول: القياس، المصالح المرسلة، الاستصلاح، أو ربط القيم والمقاصد ببعضها",
+      "استخراج الضوابط الشرعية العامة التي تحكم ربط الأمور التي لم يرد فيها نص خاص (مثل عدم مخالفة النصوص القطعية، مراعاة المقاصد الكلية، عدم إلغاء أصل منصوص)",
+      "بيان متى يكون الربط بين الركائز مقبولاً شرعاً ومتى يتجاوز الحد المشروع وفق الأدلة المتاحة",
+      "صياغة جواب موجز يوضح حدود الربط مع الاستشهاد بكل دعوى من الأدلة المتوفرة، أو التصريح بعدم كفاية الأدلة إن لم توجد نصوص كافية"
+    ],
+    "answer_ar": "التعريف:\nالمجاهدة: لغة المحاربة وشرعا محاربة النفس الأمارة بالسوء بتحميلها ما يشق عليها بما هو مطلوب في الشرع. وقيل: فطم النفس عن المألوفات، وحملها على خلاف هواها في عموم الأوقات، وبذلك يتغلب الإنسان على كل نوازع الشر وفتن الشهوات.\n\nالتأصيل/الدليل:\n\nولا تلقوا بأيديكم إلى التهلكة وأحسنوا [البقرة: 195] ولا تقتلوا أنفسكم ... [النساء: 29] ولقد آتينا لقمان الحكمة [لقمان: 12] ويعلمه الكتاب والحكمة [آل عمران: 48] يتلو عليهم آياته ويزكيهم ويعلمهم الكتاب والحكمة [البقرة: 151] واذكرن ما يتلى في بيوتكن من آيات الله والحكمة [الأحزاب: 34] وقال صلى الله عليه وسلم: إن من الشعر حكمة — صحيح البخاري (كتاب الأدب)، وصحيح مسلم (كتاب الشعر). من يرد الله به خيرا يفقهه في الدين — صحيح البخاري (كتاب العلم)، وصحيح مسلم.\n\nولا تلقوا بأيديكم إلى التهلكة وأحسنوا [البقرة: 195] ولا تقتلوا أنفسكم ... [النساء: 29] ولقد آتينا لقمان الحكمة [لقمان: 12] ويعلمه الكتاب والحكمة [آل عمران: 48] يتلو عليهم آياته ويزكيهم ويعلمهم الكتاب والحكمة [البقرة: 151] واذكرن ما يتلى في بيوتكن من آيات الله والحكمة [الأحزاب: 34] وقال صلى الله عليه وسلم: إن من الشعر حكمة — صحيح البخاري (كتاب الأدب)، وصحيح مسلم (كتاب الشعر). من يرد الله به خيرا يفقهه في الدين — صحيح البخاري (كتاب العلم)، وصحيح مسلم.\n\nملاحظة: هذا ما يمكن دعمه من النصوص المتاحة. لا توجد في الأدلة الحالية روابط دلالية مؤسسة صراحة بين هذه المفاهيم.",
+    "citations": [
+      {
+        "chunk_id": "CH_b7b03cf55177",
+        "source_anchor": "para_183",
+        "ref": null
+      },
+      {
+        "chunk_id": "CH_a6f8c92a5462",
+        "source_anchor": "userimg_0e71f5c6eaaf_ln3",
+        "ref": "[البقرة: 195]"
+      },
+      {
+        "chunk_id": "CH_e60b6298b689",
+        "source_anchor": "userimg_0e71f5c6eaaf_ln3",
+        "ref": "[النساء: 29]"
+      },
+      {
+        "chunk_id": "system_policy_response",
+        "source_anchor": "",
+        "ref": null
+      },
+      {
+        "chunk_id": "CH_527221070dfb",
+        "source_anchor": "userimg_0e71f5c6eaaf_ln3",
+        "ref": "[لقمان: 12]"
+      }
+    ],
+    "entities": [],
+    "difficulty": "hard",
+    "not_found": false,
+    "confidence": "medium"
+  }
+}

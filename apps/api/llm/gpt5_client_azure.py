@@ -39,7 +39,7 @@ class ProviderConfig:
     model_name: Optional[str] = None
     max_tokens: int = 4096
     temperature: float = 0.0
-    timeout: int = 60
+    timeout: int = 180
 
     @classmethod
     def from_env(cls) -> "ProviderConfig":
@@ -86,6 +86,7 @@ class ProviderConfig:
             model_name=os.getenv("AZURE_OPENAI_MODEL_NAME"),
             max_tokens=int(os.getenv("LLM_MAX_TOKENS", "4096")),
             temperature=float(os.getenv("LLM_TEMPERATURE", "0.0")),
+            timeout=int(os.getenv("LLM_TIMEOUT", "180")),
         )
 
     def is_configured(self) -> bool:
@@ -161,6 +162,7 @@ class AzureResponsesProvider(LLMProvider):
                 azure_endpoint=self.config.endpoint,
                 api_key=self.config.api_key,
                 api_version=self.config.api_version,
+                timeout=float(self.config.timeout),
             )
         return self._client
 
@@ -261,6 +263,7 @@ class AzureChatProvider(LLMProvider):
                 azure_endpoint=self.config.endpoint,
                 api_key=self.config.api_key,
                 api_version=self.config.api_version,
+                timeout=float(self.config.timeout),
             )
         return self._client
 
@@ -274,23 +277,100 @@ class AzureChatProvider(LLMProvider):
                 {"role": "user", "content": request.user_message},
             ]
 
-            params: dict[str, Any] = {
+            # NOTE:
+            # Some Azure deployments (e.g., GPT-5.1 in certain API versions) reject `max_tokens`
+            # and require `max_completion_tokens`. We prefer max_completion_tokens and retry once
+            # with max_tokens for backward compatibility.
+            token_limit = request.max_tokens or self.config.max_tokens
+
+            base_params: dict[str, Any] = {
                 "model": self.config.deployment_name,
                 "messages": messages,
                 "temperature": request.temperature or self.config.temperature,
-                "max_tokens": request.max_tokens or self.config.max_tokens,
             }
 
             if request.response_format:
                 # Use JSON schema format for structured output
-                params["response_format"] = {
+                base_params["response_format"] = {
                     "type": "json_schema",
                     "json_schema": request.response_format,
                 }
 
-            response = await client.chat.completions.create(**params)
+            import asyncio
+            
+            async def _call_with(param_name: str):
+                params = dict(base_params)
+                params[param_name] = token_limit
+                return await client.chat.completions.create(**params)
 
-            content = response.choices[0].message.content or ""
+            # Use explicit asyncio timeout to prevent hanging
+            llm_timeout = self.config.timeout or 120
+            
+            try:
+                response = await asyncio.wait_for(
+                    _call_with("max_completion_tokens"),
+                    timeout=llm_timeout
+                )
+            except asyncio.TimeoutError:
+                return LLMResponse(
+                    content="",
+                    error=f"LLM call timed out after {llm_timeout}s",
+                    finish_reason="timeout"
+                )
+            except Exception as e:
+                msg = str(e)
+                # If server doesn't support max_completion_tokens, retry with max_tokens.
+                if "max_completion_tokens" in msg and "Unsupported parameter" in msg:
+                    try:
+                        response = await asyncio.wait_for(
+                            _call_with("max_tokens"),
+                            timeout=llm_timeout
+                        )
+                    except asyncio.TimeoutError:
+                        return LLMResponse(
+                            content="",
+                            error=f"LLM call timed out after {llm_timeout}s",
+                            finish_reason="timeout"
+                        )
+                else:
+                    raise
+
+            # Some SDK/model combinations may return non-string message content.
+            # Best-effort extraction without assuming a fixed schema.
+            msg = response.choices[0].message
+            content_obj = getattr(msg, "content", None)
+            content = ""
+            if isinstance(content_obj, str):
+                content = content_obj
+            elif isinstance(content_obj, list):
+                parts: list[str] = []
+                for item in content_obj:
+                    if isinstance(item, str):
+                        parts.append(item)
+                    elif isinstance(item, dict):
+                        # Common shapes: {"type":"text","text":"..."} or {"text":"..."}
+                        t = item.get("text") or ""
+                        if isinstance(t, str) and t:
+                            parts.append(t)
+                        elif isinstance(item.get("content"), str):
+                            parts.append(item["content"])
+                content = "\n".join([p for p in parts if p])
+            else:
+                # Fallback: try to dump and read a "content" field if present.
+                try:
+                    dumped = msg.model_dump()  # type: ignore[attr-defined]
+                    if isinstance(dumped, dict):
+                        c = dumped.get("content")
+                        if isinstance(c, str):
+                            content = c
+                        elif isinstance(c, list):
+                            parts = []
+                            for item in c:
+                                if isinstance(item, dict) and isinstance(item.get("text"), str):
+                                    parts.append(item["text"])
+                            content = "\n".join([p for p in parts if p])
+                except Exception:
+                    content = ""
 
             parsed_json = None
             if request.response_format and content:

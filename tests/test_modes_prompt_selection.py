@@ -20,9 +20,12 @@ async def test_interpret_uses_mode_specific_prompt():
     await client.interpret("سؤال", [{"chunk_id": "CH_1", "text_ar": "x", "source_doc_id": "d", "source_anchor": "a", "refs": []}], [], mode="debate")
     await client.interpret("سؤال", [{"chunk_id": "CH_1", "text_ar": "x", "source_doc_id": "d", "source_anchor": "a", "refs": []}], [], mode="socratic")
     await client.interpret("سؤال", [{"chunk_id": "CH_1", "text_ar": "x", "source_doc_id": "d", "source_anchor": "a", "refs": []}], [], mode="judge")
+    await client.interpret("سؤال", [{"chunk_id": "CH_1", "text_ar": "x", "source_doc_id": "d", "source_anchor": "a", "refs": []}], [], mode="natural_chat")
 
     assert "Debate Mode" in provider.requests[0].system_prompt
     assert "Socratic Mode" in provider.requests[1].system_prompt
     assert "Judge Mode" in provider.requests[2].system_prompt
+    # The natural chat prompt title is bilingual and does not include the word "Mode".
+    assert "Natural Scholar Chat" in provider.requests[3].system_prompt
 
 

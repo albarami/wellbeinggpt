@@ -94,9 +94,8 @@ async def test_sql_retrieval_returns_chunks_for_entity(require_db):
                 LIMIT 1
             """)
         )).fetchone()
-        
-        if not sv_row:
-            pytest.skip("No sub_value with chunks found")
+
+        assert sv_row is not None, "Expected at least one sub_value with chunks in DB"
         
         chunks = await get_chunks_with_refs(session, EntityType.SUB_VALUE, sv_row.id)
         

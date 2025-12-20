@@ -1,0 +1,29 @@
+feat: World Model engine, 8-GPU reranker, model bakeoff, 100% regression
+
+Major features:
+- World Model engine with mechanism graph (loops, interventions, simulator)
+- 8-GPU CrossEncoder reranker trained on 5,600 pairs (DataParallel)
+- Model bakeoff: GPT-5.1 selected as default (95.6% PASS_FULL rate)
+- Regression suite: 100% pass rate on 10 critical questions
+
+Key fixes:
+- False abstention: seed retrieval floor for global synthesis questions
+- Policy intent: SYSTEM_LIMITS_POLICY now achieves PASS_FULL
+- Seed floor SQL: fixed chunk.entity_type/entity_id join for pillars
+- Contract gate: added system_limits_policy intent detection
+
+New components:
+- apps/api/core/world_model/ (loop reasoner, intervention planner, simulator)
+- apps/api/retrieve/reranker.py (CrossEncoder integration)
+- apps/api/core/answer_contract.py (deterministic contract checking)
+- eval/ (bakeoff datasets, regression tests, reports)
+- scripts/train_reranker_dp.py (multi-GPU training)
+
+CI/Tooling:
+- make ci: runs tests + regression gate
+- make eval-regression: regression test suite
+- make reranker-ab: A/B test for reranker
+
+Configuration:
+- RERANKER_ENABLED=true (production default)
+- gpt-5.1 as default model, gpt-5-chat as fallback

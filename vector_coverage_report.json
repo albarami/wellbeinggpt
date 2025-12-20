@@ -1,0 +1,71 @@
+{
+  "generated_at": "2025-12-14T05:43:08.471954",
+  "top_k": 10,
+  "vector_backend": "bm25",
+  "entities_checked": 192,
+  "entities_found_in_top_k": 192,
+  "failures": [],
+  "ref_query_checks": [
+    {
+      "id": "ref-01",
+      "query": "آل عمران: 200",
+      "status": "pass",
+      "expected_chunk_ids": [
+        "CH_3acfd0e758d4"
+      ],
+      "returned_chunk_ids": [
+        "CH_3acfd0e758d4",
+        "CH_fa01e8bcc18b",
+        "CH_15071472a5a6",
+        "CH_4f305882ea93",
+        "CH_734be02c3b42",
+        "CH_b9e67c8abe40",
+        "CH_a493e8a679bd",
+        "CH_d4dbf0a2755e",
+        "CH_0fe6d1acc4d8",
+        "CH_104113d110be"
+      ]
+    },
+    {
+      "id": "ref-02",
+      "query": "يوسف: 86",
+      "status": "pass",
+      "expected_chunk_ids": [
+        "CH_a54510d98c18"
+      ],
+      "returned_chunk_ids": [
+        "CH_a54510d98c18",
+        "CH_17962ab7c53c",
+        "CH_168c49323954",
+        "CH_900d9d5046ed",
+        "CH_7f1dc5a11cc0",
+        "CH_b338aefbd907",
+        "CH_fbce7e0217b3",
+        "CH_fb0687559595",
+        "CH_d7d0142150c0",
+        "CH_1deb8ca6955b"
+      ]
+    },
+    {
+      "id": "ref-03",
+      "query": "الحجرات: 6",
+      "status": "pass",
+      "expected_chunk_ids": [
+        "CH_6a6cefcc60ba"
+      ],
+      "returned_chunk_ids": [
+        "CH_432af2c5967c",
+        "CH_6a6cefcc60ba",
+        "CH_e38ccb555f7e",
+        "CH_88b298934bbf",
+        "CH_50b2b16bd7d4",
+        "CH_d02143efea9f",
+        "CH_658cdda18ffd",
+        "CH_91c541425df7",
+        "CH_d7c708f0fc5f",
+        "CH_145504f705ca"
+      ]
+    }
+  ],
+  "status": "complete"
+}

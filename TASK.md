@@ -7,6 +7,17 @@
 | ID | Task | Status | Date Started | Date Completed |
 |----|------|--------|--------------|----------------|
 | D1-1 | Ingest missing sections from image-based pages (OCR from DOCX media) and re-run ingestion | ✅ Complete | 2025-12-12 | 2025-12-13 |
+| E1-1 | Build deterministic end-to-end evaluation harness (datasets, modes, scoring, reports, pytest gates) | ✅ Complete | 2025-12-14 | 2025-12-14 |
+| S2-1 | Scholar-level depth upgrade (Scholar Notes Pack + typed edge-grounding + scholar reasoning + eval gates + tuning) | ✅ Complete | 2025-12-14 | 2025-12-15 |
+| S2-2 | Stage 2 depth: raise Deep rubric/claims + lift Gold QA rubric via light-deep routing (no safety regressions) | ✅ Complete | 2025-12-15 | 2025-12-15 |
+| S3-1 | Framework semantic edge miner: extract grounded cross-pillar SCHOLAR_LINK edges from framework chunks (no new sources) | ✅ Complete | 2025-12-16 | 2025-12-16 |
+| S3-2 | Scale framework semantic edges + multi-span stitching + richer bridge notes v2 (no new sources) | ✅ Complete | 2025-12-16 | 2025-12-16 |
+| S3-3 | Add argument-chain trace + boundary mining upgrades + stakeholder_acceptance_v2_hard (framework-only) | ✅ Complete | 2025-12-16 | 2025-12-16 |
+| S3-4 | Add NATURAL_SCHOLAR_CHAT ("natural_chat") mode: narrative interpreter prompt + runtime switch + stakeholder eval wiring (no safety regressions) | ✅ Complete | 2025-12-16 | 2025-12-16 |
+| UI1-1 | Build production Scholar Chat + Evidence + Graph UI (Next.js in apps/web) + backend /ask/ui wrapper + grounded/capped graph hooks + replay/feedback loop | 🔄 In Progress | 2025-12-16 |  |
+| DOC1-2 | Restore + enhance `QURANIC_BEHAVIOR_CLASSIFICATION_MATRIX.md` using Bouzidani paper (fitrah/basira, objective ethics, 3-world model, action/niyyah taxonomy, measurement instruments) | ✅ Complete | 2025-12-20 | 2025-12-20 |
+| DOC1-3 | Add “لا…ولكن/لكنهم” negation-contrast guidance + analytic crosswalk appendix + tighten periodicity wording + enforce behavior-concept assertions | ✅ Complete | 2025-12-20 | 2025-12-20 |
+| DOC1-4 | Add worked examples + stronger warnings for research-grade axes in `QURANIC_BEHAVIOR_CLASSIFICATION_MATRIX.md` | ✅ Complete | 2025-12-20 | 2025-12-20 |
 
 ### Discovered During Work
 
@@ -15,6 +26,11 @@
 | D1-1 | Ingest missing sections from image-based pages (OCR from DOCX media) and re-run ingestion | ✅ Complete | 2025-12-12 | 2025-12-13 |
 | D1-2 | Replace Azure Search dependency with local BM25 vector retrieval (no external services) and update tests to run with no skips | ✅ Complete | 2025-12-14 | 2025-12-14 |
 | D1-3 | Generate proof artifacts (coverage/vector/graph/ask/A-B) and add local embeddings (no Azure) so coverage is fully provable | ✅ Complete | 2025-12-14 | 2025-12-14 |
+| E1-1a | Define eval JSONL schema (claims with support policy, canonical citations) + deterministic logger | ✅ Complete | 2025-12-14 | 2025-12-14 |
+| E1-1b | Add canonical citation span support (precomputed chunk sentence spans; validate not discover) | ✅ Complete | 2025-12-14 | 2025-12-14 |
+| E1-1c | Deterministic dataset generator (gold/cross-pillar/negative/injection/mixed) + golden slice overrides | ✅ Complete | 2025-12-14 | 2025-12-14 |
+| E1-1d | Deterministic runner with comparable modes (LLM_ONLY_UNGROUNDED, LLM_ONLY_SAFE, RAG_ONLY, RAG_PLUS_GRAPH, FULL_SYSTEM) | ✅ Complete | 2025-12-14 | 2025-12-14 |
+| E1-1e | Scorers + hard gates + report generation + make targets (incl. policy audit) | ✅ Complete | 2025-12-14 | 2025-12-14 |
 
 ---
 

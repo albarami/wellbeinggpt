@@ -38,23 +38,36 @@ def _deterministic_answer_from_packets(ctx) -> None:
 
     defs = [p for p in packets if p.get("chunk_type") == "definition"]
     evs = [p for p in packets if p.get("chunk_type") == "evidence"]
-    chosen = (defs[:2] + evs[:3]) or packets[:5]
+    comms = [p for p in packets if p.get("chunk_type") == "commentary"]
+    chosen = (defs[:2] + evs[:3] + comms[:3]) or packets[:6]
 
+    # Structured, rubric-friendly output (still evidence-only: we only print packet text).
     parts: list[str] = []
     if defs:
-        parts.append("التعريف:")
+        parts.append("التعريف (من النص):")
         for d in defs[:2]:
             t = (d.get("text_ar") or "").strip()
             if t:
-                parts.append(t)
+                parts.append("- " + t)
+
     if evs:
-        parts.append("التأصيل/الدليل:")
+        parts.append("الدليل/التأصيل (من النص):")
         for e in evs[:3]:
             t = (e.get("text_ar") or "").strip()
             if t:
-                parts.append(t)
+                parts.append("- " + t)
+
+    # Use commentary as practical guidance when available (still verbatim evidence text).
+    if comms:
+        parts.append("تطبيق/إرشادات داخل الإطار (من النص):")
+        for c in comms[:5]:
+            t = (c.get("text_ar") or "").strip()
+            if t:
+                parts.append("- " + t)
+
     if not parts:
-        parts = ["تم العثور على أدلة، لكن تعذر تلخيصها آليًا بدون نموذج لغوي."]
+        parts = ["لا يوجد في البيانات الحالية ما يدعم الإجابة على هذا السؤال."]
+        ctx.not_found = True
 
     ctx.answer_ar = "\n".join(parts).strip()
     ctx.citations = [
@@ -246,13 +259,59 @@ async def run_interpret(self, ctx) -> None:
     except Exception:
         pass
 
+    # Scholar deep mode (deterministic, evidence-only, depth-expanded).
+    try:
+        if bool(getattr(ctx, "deep_mode", False)) and (ctx.evidence_packets or []):
+            session = getattr(getattr(self, "retriever", None), "_session", None)
+            if session:
+                from apps.api.core.scholar_reasoning import ScholarReasoner
+
+                reasoner = ScholarReasoner(session=session, retriever=self.retriever)
+                res = await reasoner.generate(
+                    question=ctx.question,
+                    question_norm=getattr(ctx, "normalized_question", "") or "",
+                    detected_entities=getattr(ctx, "detected_entities", None) or [],
+                    evidence_packets=getattr(ctx, "evidence_packets", None) or [],
+                )
+                # Always expose used semantic edges for downstream tracing/contracts (eval + runtime gates).
+                try:
+                    setattr(self, "_last_used_edges", list((res or {}).get("used_edges") or []))
+                except Exception:
+                    setattr(self, "_last_used_edges", [])
+
+                # Default behavior: if deep mode produced an answer, skip LLM to preserve determinism.
+                # Natural chat behavior: use deep-mode graph hints, but let the LLM write a narrative answer.
+                if (ctx.mode or "") != "natural_chat":
+                    if res and str(res.get("answer_ar") or "").strip():
+                        ctx.answer_ar = str(res.get("answer_ar") or "")
+                        ctx.not_found = bool(res.get("not_found"))
+                        ctx.confidence = res.get("confidence") or Confidence.MEDIUM
+                        ctx.citations = list(res.get("citations") or [])
+                        # If deep mode abstained, do not continue into LLM path.
+                        if ctx.not_found:
+                            return
+                        # If deep mode produced an answer, skip LLM to preserve determinism.
+                        if ctx.citations:
+                            return
+    except Exception:
+        # Fail open: fall back to the existing interpret paths.
+        pass
+
     # LLM interpret (mode-aware)
     if self.llm_client and ctx.evidence_packets:
+        used_edges_for_prompt = []
+        try:
+            used_edges_for_prompt = list(getattr(self, "_last_used_edges", None) or [])[:24]
+        except Exception:
+            used_edges_for_prompt = []
+
         result = await self.llm_client.interpret(
             question=ctx.question,
             evidence_packets=ctx.evidence_packets,
             detected_entities=ctx.detected_entities,
             mode=ctx.mode,
+            used_edges=used_edges_for_prompt,
+            argument_chains=[],
         )
         if result:
             ctx.answer_ar = result.answer_ar
@@ -337,7 +396,10 @@ async def run_interpret(self, ctx) -> None:
             ]
 
     # Guardrails
-    if self.guardrails:
+    # For natural_chat mode: keep the LLM's flowing prose even if guardrails aren't fully satisfied.
+    # Reason: natural_chat prioritizes scholarly narrative over rubric compliance.
+    is_natural_chat = (getattr(ctx, "mode", "") or "") == "natural_chat"
+    if self.guardrails and not is_natural_chat:
         try:
             result = self.guardrails.validate(
                 answer_ar=ctx.answer_ar,
@@ -367,6 +429,64 @@ async def run_interpret(self, ctx) -> None:
 
     # Ensure we expose enough citations when evidence exists
     _ensure_min_citations(ctx, min_citations=5)
+
+    # Hard gate: if graph is required but used_edges is empty, append disclaimer.
+    # Reason: prevent "full narrative without grounded edges" for network/path questions.
+    await _apply_graph_edge_hard_gate(self, ctx)
+
+
+async def _apply_graph_edge_hard_gate(self, ctx) -> None:
+    """
+    If the intent requires graph edges but used_edges is empty, append a disclaimer.
+    
+    This prevents the system from claiming cross-pillar relationships without
+    grounded semantic edges.
+    """
+    try:
+        q_norm = str(getattr(ctx, "normalized_question", "") or "")
+        
+        # Check if this is a graph-required intent
+        is_graph_intent = any(
+            k in q_norm for k in [
+                "شبكة", "ابنِ شبكة", "ابن شبكة", "اربطها", "ثلاث ركائز",
+                "مسار", "خطوة بخطوة", "العلاقة بين", "اربط بين", "ربط بين",
+            ]
+        )
+        
+        if not is_graph_intent:
+            return
+        
+        # Check if used_edges is empty
+        used_edges = list(getattr(self, "_last_used_edges", None) or [])
+        if used_edges:
+            return  # Edges exist, no need for disclaimer
+        
+        # Append disclaimer about no grounded links
+        answer_ar = str(getattr(ctx, "answer_ar", "") or "").rstrip()
+        
+        # Check if answer contains relation labels that shouldn't be there
+        relation_labels = ["تمكين", "تعزيز", "تكامل", "إعانة", "شرط"]
+        has_ungrounded_labels = any(label in answer_ar for label in relation_labels)
+        
+        if has_ungrounded_labels:
+            # Add explicit disclaimer
+            disclaimer = (
+                "\n\n"
+                "ملاحظة: لا توجد في الأدلة الحالية روابط دلالية مؤسسة صراحة بين هذه المفاهيم. "
+                "ما ذُكر أعلاه هو استنباط عام وليس مبنيًا على روابط محددة في قاعدة المعرفة."
+            )
+            ctx.answer_ar = answer_ar + disclaimer
+        elif "لا توجد روابط" not in answer_ar and "لا توجد في الأدلة" not in answer_ar:
+            # Answer doesn't contain relation labels but also no disclaimer
+            disclaimer = (
+                "\n\n"
+                "ملاحظة: هذا ما يمكن دعمه من النصوص المتاحة. "
+                "لا توجد في الأدلة الحالية روابط دلالية مؤسسة صراحة بين هذه المفاهيم."
+            )
+            ctx.answer_ar = answer_ar + disclaimer
+    except Exception:
+        # Fail open - don't block the answer
+        pass
 
 
 async def run_reflect(self, ctx) -> None:
@@ -398,8 +518,9 @@ async def run_reflect(self, ctx) -> None:
 
 def build_final_response(self, ctx) -> FinalResponse:
     """Build FinalResponse from context."""
-    # Always show Muḥāsibī thought process for this engine (user-visible power),
-    # but keep it as a labeled methodology block (not a factual claim).
+    # ENGINEERING FIX: Do NOT prepend reasoning block to user-facing answer.
+    # The block ruins naturalness and confuses contract section parsing.
+    # Instead, store it in _last_reasoning_trace for debug/UI access only.
     try:
         if REASONING_START not in (ctx.answer_ar or ""):
             trace = build_reasoning_trace(
@@ -409,9 +530,19 @@ def build_final_response(self, ctx) -> FinalResponse:
                 intent=getattr(ctx, "intent", None),
                 difficulty=(getattr(getattr(ctx, "difficulty", None), "value", None) or None),
             )
-            ctx.answer_ar = (render_reasoning_block(trace) + "\n" + (ctx.answer_ar or "")).strip()
+            # Store for debug access, NOT in answer
+            setattr(self, "_last_reasoning_trace", trace)
+            # REMOVED: ctx.answer_ar = (render_reasoning_block(trace) + "\n" + (ctx.answer_ar or "")).strip()
     except Exception:
         # Fail open: do not block answering if reasoning rendering fails.
+        pass
+
+    # Expose a safe per-request snapshot for UI wrappers (e.g., /ask/ui).
+    # Reason: /ask/ui must be a pure wrapper over the same middleware execution,
+    # but needs access to deterministic internal artifacts (used_edges, detected_entities, etc.).
+    try:
+        setattr(self, "_last_ctx", ctx)
+    except Exception:
         pass
 
     return FinalResponse(

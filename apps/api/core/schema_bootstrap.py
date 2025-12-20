@@ -77,14 +77,23 @@ async def apply_schema(
     executed = 0
     skipped = 0
 
-    async with engine.begin() as conn:
+    # IMPORTANT:
+    # Postgres aborts the whole transaction after the first error, causing all subsequent
+    # statements to fail with "current transaction is aborted". Because we want best-effort
+    # idempotency (including later ALTER TABLE ... IF NOT EXISTS), we must isolate errors by
+    # rolling back after each failure.
+    async with engine.connect() as conn:
         for stmt in statements:
             try:
                 await conn.execute(text(stmt))
+                await conn.commit()
                 executed += 1
             except Exception:
-                # Best-effort idempotency: some DDL may fail if extension isn't permitted, etc.
                 skipped += 1
+                try:
+                    await conn.rollback()
+                except Exception:
+                    pass
                 continue
 
     return SchemaApplyResult(

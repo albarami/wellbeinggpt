@@ -119,6 +119,10 @@ class PathNode(BaseModel):
     type: str
     id: str
     via_rel: str | None = None
+    # Optional edge metadata for grounded explanations
+    edge_id: str | None = None
+    relation_type: str | None = None
+    justification_spans: list[dict] = Field(default_factory=list)
 
 
 class ExplainPathResponse(BaseModel):
@@ -143,10 +147,10 @@ async def graph_explain_path(
             target_type=target_type,
             target_id=target_id,
             max_depth=max_depth,
-            rel_types=["CONTAINS", "SUPPORTED_BY", "MENTIONS_REF", "REFERS_TO", "SHARES_REF", "SAME_NAME"],
+            rel_types=["CONTAINS", "SUPPORTED_BY", "MENTIONS_REF", "REFERS_TO", "SHARES_REF", "SAME_NAME", "SCHOLAR_LINK"],
+            require_grounded_semantic=True,
         )
         return ExplainPathResponse(found=res["found"], path=[PathNode(**n) for n in res["path"]])
-
 
 class ImpactItem(BaseModel):
     entity_type: str

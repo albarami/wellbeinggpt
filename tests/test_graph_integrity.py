@@ -365,3 +365,7 @@ async def test_edge_counts_are_reasonable(require_db):
         
         if count_dict.get("MENTIONS_REF", 0) == 0:
             print("Note: No MENTIONS_REF edges found (may need re-ingestion)")
+
+
+
+

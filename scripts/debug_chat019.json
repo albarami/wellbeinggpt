@@ -1,0 +1,393 @@
+{
+  "request_id": "442b8f55-3d41-4cb6-83b2-5a14f41617da",
+  "latency_ms": 18178,
+  "mode_used": "natural_chat",
+  "engine_used": "muhasibi",
+  "contract_outcome": "PASS_FULL",
+  "contract_reasons": [],
+  "contract_applicable": true,
+  "abstain_reason": null,
+  "citations_spans": [
+    {
+      "chunk_id": "CH_9c381fb448ff",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "para_178",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_013f28bfe5c5",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "para_999",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_a6f8c92a5462",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "userimg_0e71f5c6eaaf_ln3",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_e60b6298b689",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "userimg_0e71f5c6eaaf_ln3",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_a76dc4f5a88c",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "userimg_6af0d7b7ac5b_ln3",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_527221070dfb",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "userimg_0e71f5c6eaaf_ln3",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_d14ff734f5f0",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "para_394",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_b9e67c8abe40",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "para_739",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_8001059710ec",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "para_739",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_73528d03cca9",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "para_704",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_c50a31fd2c45",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "para_704",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_bc3b43ae7a6c",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "para_704",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    }
+  ],
+  "graph_trace": {
+    "used_edges": [],
+    "argument_chains": []
+  },
+  "mechanism_trace": {
+    "loops": [],
+    "interventions": [],
+    "simulation_summary": [],
+    "loops_count": 0,
+    "interventions_count": 0,
+    "covered_pillars": []
+  },
+  "muhasibi_trace": [
+    {
+      "state": "LISTEN",
+      "elapsed_s": 0.002953,
+      "mode": "natural_chat",
+      "language": "ar",
+      "detected_entities_count": 0,
+      "keywords_count": 6,
+      "listen_summary_ar": "سؤال عام: أريد أن أكون شخصًا أفضل، من أين أبدأ؟",
+      "ultimate_goal_ar": null,
+      "constraints_count": null,
+      "path_steps": null,
+      "evidence_packets_count": null,
+      "has_definition": null,
+      "has_evidence": null,
+      "not_found": null,
+      "issues": null,
+      "confidence": null,
+      "citations_count": null,
+      "reflection_added": null,
+      "done": null
+    },
+    {
+      "state": "PURPOSE",
+      "elapsed_s": 3.422098,
+      "mode": "natural_chat",
+      "language": "ar",
+      "detected_entities_count": null,
+      "keywords_count": null,
+      "listen_summary_ar": null,
+      "ultimate_goal_ar": "وضع خطة مبدئية لمساعدة السائل على أن يصبح شخصًا أفضل وفق قيم الرفاه الإسلامية، مع توضيح من أين يبدأ عمليًا وروحيًا",
+      "constraints_count": 3,
+      "path_steps": null,
+      "evidence_packets_count": null,
+      "has_definition": null,
+      "has_evidence": null,
+      "not_found": null,
+      "issues": null,
+      "confidence": null,
+      "citations_count": null,
+      "reflection_added": null,
+      "done": null
+    },
+    {
+      "state": "RETRIEVE",
+      "elapsed_s": 0.392237,
+      "mode": "natural_chat",
+      "language": "ar",
+      "detected_entities_count": null,
+      "keywords_count": null,
+      "listen_summary_ar": null,
+      "ultimate_goal_ar": null,
+      "constraints_count": null,
+      "path_steps": null,
+      "evidence_packets_count": 25,
+      "has_definition": true,
+      "has_evidence": true,
+      "not_found": null,
+      "issues": null,
+      "confidence": null,
+      "citations_count": null,
+      "reflection_added": null,
+      "done": null
+    },
+    {
+      "state": "ACCOUNT",
+      "elapsed_s": 0.0,
+      "mode": "natural_chat",
+      "language": "ar",
+      "detected_entities_count": null,
+      "keywords_count": null,
+      "listen_summary_ar": null,
+      "ultimate_goal_ar": null,
+      "constraints_count": null,
+      "path_steps": null,
+      "evidence_packets_count": null,
+      "has_definition": null,
+      "has_evidence": null,
+      "not_found": false,
+      "issues": [],
+      "confidence": null,
+      "citations_count": null,
+      "reflection_added": null,
+      "done": null
+    },
+    {
+      "state": "INTERPRET",
+      "elapsed_s": 14.352516,
+      "mode": "natural_chat",
+      "language": "ar",
+      "detected_entities_count": null,
+      "keywords_count": null,
+      "listen_summary_ar": null,
+      "ultimate_goal_ar": null,
+      "constraints_count": null,
+      "path_steps": null,
+      "evidence_packets_count": null,
+      "has_definition": null,
+      "has_evidence": null,
+      "not_found": false,
+      "issues": null,
+      "confidence": "Confidence.HIGH",
+      "citations_count": 13,
+      "reflection_added": null,
+      "done": null
+    },
+    {
+      "state": "REFLECT",
+      "elapsed_s": 0.000999,
+      "mode": "natural_chat",
+      "language": "ar",
+      "detected_entities_count": null,
+      "keywords_count": null,
+      "listen_summary_ar": null,
+      "ultimate_goal_ar": null,
+      "constraints_count": null,
+      "path_steps": null,
+      "evidence_packets_count": null,
+      "has_definition": null,
+      "has_evidence": null,
+      "not_found": null,
+      "issues": null,
+      "confidence": null,
+      "citations_count": null,
+      "reflection_added": false,
+      "done": null
+    }
+  ],
+  "truncated_fields": {},
+  "original_counts": {
+    "citations_spans": 12,
+    "used_edges": 0,
+    "argument_chains": 0
+  },
+  "final": {
+    "listen_summary_ar": "سؤال عام: أريد أن أكون شخصًا أفضل، من أين أبدأ؟",
+    "purpose": {
+      "ultimate_goal_ar": "وضع خطة مبدئية لمساعدة السائل على أن يصبح شخصًا أفضل وفق قيم الرفاه الإسلامية، مع توضيح من أين يبدأ عمليًا وروحيًا",
+      "constraints_ar": [
+        "evidence_only",
+        "cite_every_claim",
+        "refuse_if_missing"
+      ]
+    },
+    "path_plan_ar": [
+      "تحديد ما إذا كان السؤال عامًا عن تحسين الذات أم مرتبطًا صراحة بالقيم الإسلامية للرفاه",
+      "البحث في الأدلة المتاحة عن المبادئ الإسلامية العامة لتحسين النفس (مثل التوبة، النية، محاسبة النفس، الأخلاق الحسنة)",
+      "استخراج خطوات عملية أولية يمكن البدء بها (مثل تصحيح العلاقة مع الله، تحسين الأخلاق مع الناس، تنظيم الوقت، ترك الذنوب الظاهرة)",
+      "ترتيب الخطوات من الداخل إلى الخارج: القلب والنية، ثم العبادات، ثم المعاملات والعادات اليومية",
+      "صياغة جواب مختصر وعملي يذكر 3–5 محاور بداية واضحة، مع ربط كل محور بدليل أو قيمة إسلامية إن توفرت في الأدلة",
+      "إن لم تتوفر أدلة كافية في المادة، الامتناع عن الإجابة وفق شرط refuse_if_missing"
+    ],
+    "answer_ar": "أقرب ما يكون إلى جواب سؤالك في الإطار هو أن بداية أن يكون الإنسان «أفضل» أن يكون «أحسن»؛ لأن النصوص تربط بين الفلاح ومحبة الله وبين الإحسان والعمل الحسن. قال تعالى: {فَآتَاهُمُ اللَّهُ ثَوَابَ الدُّنْيَا وَحُسْنَ ثَوَابِ الْآخِرَةِ ۗ وَاللَّهُ يُحِبُّ الْمُحْسِنِينَ}، فالإطار يلفت نظرك إلى أن الطريق ليس مجرد شعور بالرغبة في التغيير، بل انتقال إلى إحسان في العمل والسلوك، رجاء ثواب الدنيا والآخرة ومحبة الله عز وجل.\n\nومما يُستفاد من النص أيضًا أن البداية الصحيحة أن ترى حياتك كلها أمانة ستُسأل عنها، لا مجرد لحظة عابرة من الحماس. ففي الحديث: «لا تزولُ قدمَا عبدٍ يومَ القيامةِ حتى يُسألَ عن عمرِه فيمَ أفناه، وعن علمِه فيمَ فعل، وعن مالِه من أين اكتسبه وفيمَ أنفقه، وعن جسمِه فيمَ أبلاه». فهذا يضع لك خريطة عامة: إن أردت أن تكون أفضل، فانظر إلى عمرك، وعلمك، ومالك، وجسدك؛ كيف تُصلح علاقتك بكل واحد منها حتى تلقى الله وأنت أحسن حالًا فيها.\n\nويتضح من بقية النصوص أن منطلق التحسن ليس ازدراء النفس ولا إيذاءها، بل حمايتها من التهلكة، كما في قوله تعالى: {ولا تُلقوا بأيديكم إلى التهلكة وأحسنوا}، وقوله: {ولا تقتلوا أنفسكم}. فالإطار يربط بين ترك الإضرار بالنفس وبين الإحسان؛ كأن البداية أن تكفّ عن كل ما يهلك جسدك أو روحك، ثم تنتقل إلى الإحسان في استعمال هذه النعمة. ويؤكد هذا المعنى أيضًا الحديث: «نعمتان مغبون فيهما كثير من الناس: الصحة والفراغ»، فكأن أول خطوة أن تعترف بنعمة صحتك ووقتك، وألا تضيّعهما فيما لا ينفع.\n\nأما عن البعد الداخلي في التغيير، فيشير النص إلى قيمة الحكمة والفهم العميق؛ {ولقد آتينا لقمان الحكمة}، و{من يرد الله به خيرًا يفقهه في الدين}. فليس المطلوب مجرد تغيير سطحي في بعض العادات، بل أن تطلب لنفسك نصيبًا من الحكمة والفقه؛ تفهم به دينك وحياتك، وتحوّل تجاربك السابقة – حتى المؤلمة منها – إلى وعي أعمق وسلوك أصلح، وهذا قريب مما جاء في تعريف النضج بأنه «تحويل الخبرات العاطفية السابقة إلى فهم أعمق للذات، واستثمارها في تطوير السلوك المستقبلي».\n\nومن جهة التعامل مع الناس، يلفت الإطار إلى أن من علامات الارتقاء أن تضبط انفعالاتك، لا أن تنفجر بها؛ {وَالْكَاظِمِينَ الْغَيْظَ وَالْعَافِينَ عَنِ النَّاسِ}. فأن تكون شخصًا أفضل لا ينحصر في علاقتك بنفسك وربك، بل يظهر جليًّا في طريقة استجابتك للخطأ والأذى؛ تكظم غيظك وتختار العفو، مع أن الإنسان «خُلِقَ من عجل»، أي أن طبيعته تميل إلى العجلة والانفعال، لكن الإطار يدعوك إلى مجاهدة هذه الطبيعة وتهذيبها.\n\nومما يضيء لك طريق البداية أيضًا أن الإطار يربط بين السعي والفلاح؛ {وَأَن لَّيْسَ لِلْإِنسَانِ إِلَّا مَا سَعَىٰ}، و{إِنَّا لَا نُضِيعُ أَجْرَ مَنْ أَحْسَنَ عَمَلًا}. فمجرد التمني بأن تكون أفضل لا يكفي، بل لا بد من سعي حقيقي في واقعك، مع يقين أن الله لا يضيع أجر من أحسن عملًا، وأن الخير الذي تبذله لن يذهب هدرًا. كما أن قوله تعالى: {هُوَ الَّذِي جَعَلَ لَكُمُ الْأَرْضَ ذَلُولًا فَامْشُوا فِي مَنَاكِبِهَا وَكُلُوا مِنْ رِزْقِهِ} يذكّرك بأن العالم من حولك ميدان لهذا السعي، لا مكانًا للكسل أو الاستسلام.\n\nخلاصة ما تدل عليه هذه النصوص: أن بداية أن تكون «أفضل» هي أن تعيد ترتيب علاقتك بالله بالإحسان، وبنفسك بحفظها من التهلكة واستثمار نعمة الصحة والفراغ، وبحياتك كلها باعتبارها أمانة ستُسأل عنها، ثم تسعى سعيًا حقيقيًا في إصلاح عملك ومعاملاتك، مستعينًا بالحكمة والنضج وضبط الانفعال. هذا ما يمكن دعمه من النصوص المتاحة، أما التفاصيل العملية الدقيقة لكيفية تطبيق ذلك في كل جزئية من حياتك اليومية، فلا يوجد في الأدلة الحالية ما يمكّن من الجزم فيها.",
+    "citations": [
+      {
+        "chunk_id": "CH_9c381fb448ff",
+        "source_anchor": "para_178",
+        "ref": "{فَآتَاهُمُ اللَّهُ ثَوَابَ الدُّنْيَا وَحُسْنَ ثَوَابِ الْآخِرَةِ ۗ وَاللَّهُ يُحِبُّ الْمُحْسِنِينَ} (آل عمران: 148)"
+      },
+      {
+        "chunk_id": "CH_013f28bfe5c5",
+        "source_anchor": "para_999",
+        "ref": "(الترمذي: 2417)"
+      },
+      {
+        "chunk_id": "CH_a6f8c92a5462",
+        "source_anchor": "userimg_0e71f5c6eaaf_ln3",
+        "ref": "[البقرة: 195]"
+      },
+      {
+        "chunk_id": "CH_e60b6298b689",
+        "source_anchor": "userimg_0e71f5c6eaaf_ln3",
+        "ref": "[النساء: 29]"
+      },
+      {
+        "chunk_id": "CH_a76dc4f5a88c",
+        "source_anchor": "userimg_6af0d7b7ac5b_ln3",
+        "ref": "(البخاري 6412)"
+      },
+      {
+        "chunk_id": "CH_527221070dfb",
+        "source_anchor": "userimg_0e71f5c6eaaf_ln3",
+        "ref": "[لقمان: 12]"
+      },
+      {
+        "chunk_id": "CH_a6f8c92a5462",
+        "source_anchor": "userimg_0e71f5c6eaaf_ln3",
+        "ref": "\"من يرد الله به خيرا يفقهه في الدين\""
+      },
+      {
+        "chunk_id": "CH_d14ff734f5f0",
+        "source_anchor": "para_394",
+        "ref": null
+      },
+      {
+        "chunk_id": "CH_b9e67c8abe40",
+        "source_anchor": "para_739",
+        "ref": "[آل عمران: 134]"
+      },
+      {
+        "chunk_id": "CH_8001059710ec",
+        "source_anchor": "para_739",
+        "ref": "[الأنبياء: 37]"
+      },
+      {
+        "chunk_id": "CH_73528d03cca9",
+        "source_anchor": "para_704",
+        "ref": "[النجم:39]"
+      },
+      {
+        "chunk_id": "CH_c50a31fd2c45",
+        "source_anchor": "para_704",
+        "ref": "[الكهف: 30]"
+      },
+      {
+        "chunk_id": "CH_bc3b43ae7a6c",
+        "source_anchor": "para_704",
+        "ref": "[الملك: 15]"
+      }
+    ],
+    "entities": [],
+    "difficulty": "hard",
+    "not_found": false,
+    "confidence": "high"
+  }
+}
