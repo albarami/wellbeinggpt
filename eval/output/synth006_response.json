@@ -1,0 +1,267 @@
+{
+  "request_id": "b91673d9-f5ac-4641-b839-eb7f1d5525ba",
+  "latency_ms": 13462,
+  "mode_used": "answer",
+  "engine_used": "muhasibi",
+  "contract_outcome": "PASS_FULL",
+  "contract_reasons": [],
+  "contract_applicable": true,
+  "abstain_reason": null,
+  "citations_spans": [
+    {
+      "chunk_id": "CH_b16a979a7275",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "para_476",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_859fdc59f890",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": null,
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_fc6ca36d9317",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "para_835",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_436327fa6d9b",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "userimg_9d955a9fcd19_ln0",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    },
+    {
+      "chunk_id": "CH_f4dc917de2ca",
+      "source_id": "UNKNOWN_SOURCE",
+      "quote": "",
+      "span_start": null,
+      "span_end": null,
+      "source_anchor": "userimg_9d955a9fcd19_ln0",
+      "entity_type": null,
+      "entity_id": null,
+      "span_resolution_status": "unresolved",
+      "span_resolution_method": "chunk_not_found"
+    }
+  ],
+  "graph_trace": {
+    "used_edges": [],
+    "argument_chains": []
+  },
+  "mechanism_trace": {
+    "loops": [],
+    "interventions": [],
+    "simulation_summary": [],
+    "loops_count": 0,
+    "interventions_count": 0,
+    "covered_pillars": []
+  },
+  "muhasibi_trace": [
+    {
+      "state": "LISTEN",
+      "elapsed_s": 0.002097,
+      "mode": "answer",
+      "language": "ar",
+      "detected_entities_count": 0,
+      "keywords_count": 3,
+      "listen_summary_ar": "سؤال عام: ما المنظور الكلي للإطار؟",
+      "ultimate_goal_ar": null,
+      "constraints_count": null,
+      "path_steps": null,
+      "evidence_packets_count": null,
+      "has_definition": null,
+      "has_evidence": null,
+      "not_found": null,
+      "issues": null,
+      "confidence": null,
+      "citations_count": null,
+      "reflection_added": null,
+      "done": null
+    },
+    {
+      "state": "PURPOSE",
+      "elapsed_s": 3.114546,
+      "mode": "answer",
+      "language": "ar",
+      "detected_entities_count": null,
+      "keywords_count": null,
+      "listen_summary_ar": null,
+      "ultimate_goal_ar": "توضيح المقصود بالمنظور الكلي للإطار، أي بيان الرؤية الشاملة أو الفلسفة العامة التي يقوم عليها الإطار محل السؤال",
+      "constraints_count": 3,
+      "path_steps": null,
+      "evidence_packets_count": null,
+      "has_definition": null,
+      "has_evidence": null,
+      "not_found": null,
+      "issues": null,
+      "confidence": null,
+      "citations_count": null,
+      "reflection_added": null,
+      "done": null
+    },
+    {
+      "state": "RETRIEVE",
+      "elapsed_s": 3.125811,
+      "mode": "answer",
+      "language": "ar",
+      "detected_entities_count": null,
+      "keywords_count": null,
+      "listen_summary_ar": null,
+      "ultimate_goal_ar": null,
+      "constraints_count": null,
+      "path_steps": null,
+      "evidence_packets_count": 17,
+      "has_definition": true,
+      "has_evidence": true,
+      "not_found": null,
+      "issues": null,
+      "confidence": null,
+      "citations_count": null,
+      "reflection_added": null,
+      "done": null
+    },
+    {
+      "state": "ACCOUNT",
+      "elapsed_s": 0.0,
+      "mode": "answer",
+      "language": "ar",
+      "detected_entities_count": null,
+      "keywords_count": null,
+      "listen_summary_ar": null,
+      "ultimate_goal_ar": null,
+      "constraints_count": null,
+      "path_steps": null,
+      "evidence_packets_count": null,
+      "has_definition": null,
+      "has_evidence": null,
+      "not_found": false,
+      "issues": [],
+      "confidence": null,
+      "citations_count": null,
+      "reflection_added": null,
+      "done": null
+    },
+    {
+      "state": "INTERPRET",
+      "elapsed_s": 7.019117,
+      "mode": "answer",
+      "language": "ar",
+      "detected_entities_count": null,
+      "keywords_count": null,
+      "listen_summary_ar": null,
+      "ultimate_goal_ar": null,
+      "constraints_count": null,
+      "path_steps": null,
+      "evidence_packets_count": null,
+      "has_definition": null,
+      "has_evidence": null,
+      "not_found": false,
+      "issues": null,
+      "confidence": "Confidence.MEDIUM",
+      "citations_count": 5,
+      "reflection_added": null,
+      "done": null
+    },
+    {
+      "state": "REFLECT",
+      "elapsed_s": 0.0,
+      "mode": "answer",
+      "language": "ar",
+      "detected_entities_count": null,
+      "keywords_count": null,
+      "listen_summary_ar": null,
+      "ultimate_goal_ar": null,
+      "constraints_count": null,
+      "path_steps": null,
+      "evidence_packets_count": null,
+      "has_definition": null,
+      "has_evidence": null,
+      "not_found": null,
+      "issues": null,
+      "confidence": null,
+      "citations_count": null,
+      "reflection_added": false,
+      "done": null
+    }
+  ],
+  "truncated_fields": {},
+  "original_counts": {
+    "citations_spans": 5,
+    "used_edges": 0,
+    "argument_chains": 0
+  },
+  "final": {
+    "listen_summary_ar": "سؤال عام: ما المنظور الكلي للإطار؟",
+    "purpose": {
+      "ultimate_goal_ar": "توضيح المقصود بالمنظور الكلي للإطار، أي بيان الرؤية الشاملة أو الفلسفة العامة التي يقوم عليها الإطار محل السؤال",
+      "constraints_ar": [
+        "evidence_only",
+        "cite_every_claim",
+        "refuse_if_missing"
+      ]
+    },
+    "path_plan_ar": [
+      "تحديد المقصود بكلمة 'الإطار' في سياق السؤال (هل هو إطار القيم الإسلامية أم إطار آخر)",
+      "البحث في الأدلة المتاحة عن تعريف المنظور الكلي أو الرؤية الشاملة لذلك الإطار",
+      "استخلاص النقاط الأساسية التي تشكل هذا المنظور الكلي من المصادر الموثوقة",
+      "صياغة الإجابة بشكل منظم مع الاستشهاد بكل معلومة من الأدلة المتاحة"
+    ],
+    "answer_ar": "التعريف (من النص):\n- القيمة الجزئية: الرؤية\n- الركيزة: الحياة الروحية\nالدليل/التأصيل (من النص):\n- : قال تعالى: الرؤية بالبصر: ﴿إِذْ يَرَوْنَهُمْ مِثْلَيْهِمْ رَأْيَ الْعَيْنِ﴾ [آل عمران: 13]. الرؤية بالبصيرة: ﴿قُلْ هَذِهِ سَبِيلِي أَدْعُو إِلَى اللَّهِ عَلَى بَصِيرَةٍ﴾ [يوسف: 108]. الاعتبار عبر الرؤية: ﴿أَلَمْ تَرَ كَيْفَ فَعَلَ رَبُّكَ بِأَصْحَابِ الْفِيلِ﴾ [الفيل: 1] وقال صلى الله عليه وسلم: رؤية القلب والبصيرة: \"التقوى هاهنا\" — وأشار إلى صدره ثلاث مرات. (صحيح مسلم). رؤية النبي ﷺ ربَّه: في أحاديث المعراج (صحيح مسلم) خلاف العلماء: هل رؤية بصر أو بصيرة، وهو أصل في بحث \"الرؤية\". «اتقوا فراسة المؤمن فإنه ينظر بنور الله» — رواه الترمذي وحسّنه بعض أهل العلم.\n- قال تعالى: قد جاءكم بصائر من ربكم [الأنعام: 104] هذا بصائر للناس وهدى ورحمة لقوم يوقنون [الجاثية: 20] هذا بصائر للناس وهدى ورحمة لقوم يؤمنون [الأعراف: 203] قل هذه سبيلي أدعو إلى الله على بصيرة أنا ومن اتبعني [يوسف: 108] فإنها لا تعمى الأبصار ولكن تعمى القلوب التي في الصدور [الحج: 46] إن في ذلك لذكرى لمن كان له قلب أو ألقى السمع وهو شهيد [ق: 37] أفلا يتدبرون القرآن [محمد: 24] إن في خلق السماوات والأرض واختلاف الليل والنهار لآيات لأولي الألباب ... [آل عمران: 190–191] الذين يستمعون القول فيتبعون أحسنه [الزمر: 18] قل سيروا في الأرض فانظروا كيف بدأ الخلق [العنكبوت: 20] فاعتبروا يا أولي الأبصار [الحشر: 2]\n- قال تعالى: قد جاءكم بصائر من ربكم [الأنعام: 104] هذا بصائر للناس وهدى ورحمة لقوم يوقنون [الجاثية: 20] هذا بصائر للناس وهدى ورحمة لقوم يؤمنون [الأعراف: 203] قل هذه سبيلي أدعو إلى الله على بصيرة أنا ومن اتبعني [يوسف: 108] فإنها لا تعمى الأبصار ولكن تعمى القلوب التي في الصدور [الحج: 46] إن في ذلك لذكرى لمن كان له قلب أو ألقى السمع وهو شهيد [ق: 37] أفلا يتدبرون القرآن [محمد: 24] إن في خلق السماوات والأرض واختلاف الليل والنهار لآيات لأولي الألباب ... [آل عمران: 190–191] الذين يستمعون القول فيتبعون أحسنه [الزمر: 18] قل سيروا في الأرض فانظروا كيف بدأ الخلق [العنكبوت: 20] فاعتبروا يا أولي الأبصار [الحشر: 2]",
+    "citations": [
+      {
+        "chunk_id": "CH_b16a979a7275",
+        "source_anchor": "para_476",
+        "ref": null
+      },
+      {
+        "chunk_id": "CH_859fdc59f890",
+        "source_anchor": "",
+        "ref": null
+      },
+      {
+        "chunk_id": "CH_fc6ca36d9317",
+        "source_anchor": "para_835",
+        "ref": "رواه الترمذي وحسّنه بعض أهل العلم."
+      },
+      {
+        "chunk_id": "CH_436327fa6d9b",
+        "source_anchor": "userimg_9d955a9fcd19_ln0",
+        "ref": "[الجاثية: 20]"
+      },
+      {
+        "chunk_id": "CH_f4dc917de2ca",
+        "source_anchor": "userimg_9d955a9fcd19_ln0",
+        "ref": "[الأعراف: 203]"
+      }
+    ],
+    "entities": [],
+    "difficulty": "hard",
+    "not_found": false,
+    "confidence": "medium"
+  }
+}

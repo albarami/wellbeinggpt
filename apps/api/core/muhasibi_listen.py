@@ -94,6 +94,58 @@ def _is_guidance_framework_chat_intent(normalized_question: str, mode: str) -> b
     return any(m in q for m in markers)
 
 
+def _is_global_synthesis_intent(normalized_question: str) -> bool:
+    """
+    Detect global synthesis/framework-wide questions.
+    
+    These ask about the framework's overall perspective, structure, or impact.
+    They require seed retrieval and should bypass lexical relevance gating.
+    
+    Examples:
+    - "ما المنظور الكلي للإطار؟"
+    - "كيف تُسهم الحياة الطيبة في ازدهار الإنسان والمجتمع؟"
+    - "ما الذي يميّز هذا الإطار؟"
+    
+    Note: markers must be in NORMALIZED form (no hamza, no shadda, ى->ي).
+    """
+    q = normalized_question or ""
+    
+    # Markers in normalized form
+    synthesis_markers = [
+        # Overall perspective
+        "المنظور الكلي",       # المنظور الكلي
+        "الرويه الشامله",      # الرؤية الشاملة
+        "الرويه الكليه",       # الرؤية الكلية
+        "النظره الكليه",       # النظرة الكلية
+        "النظره الشامله",      # النظرة الشاملة
+        # Framework uniqueness
+        "يميز هذا الاطار",     # يميّز هذا الإطار
+        "ما يميز الاطار",      # ما يميز الإطار
+        "ما الذي يميز",        # ما الذي يميز
+        # Framework contribution
+        "كيف يسهم الاطار",     # كيف يُسهم الإطار
+        "كيف تسهم",            # كيف تُسهم
+        "ازدهار الانسان",      # ازدهار الإنسان
+        "ازدهار المجتمع",      # ازدهار المجتمع
+        "الحياه الطيبه",       # الحياة الطيبة
+        # Framework overview
+        "فلسفه الاطار",        # فلسفة الإطار
+        "هدف الاطار",          # هدف الإطار
+        "غايه الاطار",         # غاية الإطار
+        "مقاصد الاطار",        # مقاصد الإطار
+        # Integration questions
+        "ترابط الركايز",       # ترابط الركائز
+        "تكامل الركايز",       # تكامل الركائز
+        "العلاقه بين الركايز", # العلاقة بين الركائز
+        # Framework essence
+        "جوهر الاطار",         # جوهر الإطار
+        "ماهيه الاطار",        # ماهية الإطار
+        "روح الاطار",          # روح الإطار
+    ]
+    
+    return any(m in q for m in synthesis_markers)
+
+
 def _detect_out_of_scope_ar(normalized_question: str) -> tuple[bool, str]:
     """
     Detect out-of-scope questions deterministically (Arabic-first).
@@ -269,6 +321,21 @@ async def run_listen(self, ctx) -> None:
             "suggested_queries_ar": [],
             "required_clarification_question_ar": None,
             "requires_seed_retrieval": True,
+        }
+    # GLOBAL_SYNTHESIS: broad framework synthesis questions
+    # These ask about the framework's overall structure, perspective, or impact.
+    elif _is_global_synthesis_intent(qn):
+        ctx.intent = {
+            "intent_type": "global_synthesis",
+            "is_in_scope": True,
+            "confidence": 0.9,
+            "target_entity_type": None,
+            "target_entity_name_ar": None,
+            "notes_ar": "سؤال تركيبي كلي عن الإطار",
+            "suggested_queries_ar": [],
+            "required_clarification_question_ar": None,
+            "requires_seed_retrieval": True,
+            "bypass_relevance_gate": True,
         }
 
     # Intent classification (meaning-first) — optional and safe.

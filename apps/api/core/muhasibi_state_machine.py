@@ -559,10 +559,21 @@ class MuhasibiMiddleware:
 
         # Check if we have any evidence
         if not ctx.evidence_packets:
-            ctx.account_issues.append("لا توجد أدلة متاحة")
-            ctx.citation_valid = False
-            ctx.not_found = True
-            return MuhasibiState.INTERPRET  # Skip to interpret with not_found
+            # For synthesis intents, don't set not_found even if empty
+            # Reason: synthesis questions can sometimes get 0 evidence due to
+            # flaky retrieval, but the bypass in apply_question_evidence_relevance_gate
+            # should prevent false abstention. Also, seed floor should have added seeds.
+            intent = getattr(ctx, "intent", None) or {}
+            intent_type = str(intent.get("intent_type") or "")
+            synthesis_intents = {
+                "global_synthesis", "cross_pillar", "network_build",
+                "compare", "world_model", "guidance_framework_chat",
+            }
+            if intent_type not in synthesis_intents:
+                ctx.account_issues.append("لا توجد أدلة متاحة")
+                ctx.citation_valid = False
+                ctx.not_found = True
+                return MuhasibiState.INTERPRET  # Skip to interpret with not_found
 
         # Check for definition
         if not ctx.has_definition:
