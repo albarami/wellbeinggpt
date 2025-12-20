@@ -139,6 +139,17 @@ def apply_question_evidence_relevance_gate(ctx) -> None:
                 return
     except Exception:
         pass
+    
+    # BYPASS: Seed floor present (from cached seed bundle)
+    # Reason: If seed_floor evidence is present, never abstain.
+    # This prevents false abstentions from entity detector variance.
+    try:
+        seed_packets = [p for p in packets if p.get("source") == "seed_floor"]
+        if len(seed_packets) >= 3:
+            # We have seed floor evidence - don't abstain
+            return
+    except Exception:
+        pass
 
     # If we have high-confidence detected framework entities, do NOT apply lexical relevance gating.
     # Reason: retrieval is anchored to in-corpus entities; lexical mismatch would create false

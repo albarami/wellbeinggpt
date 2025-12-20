@@ -497,108 +497,53 @@ class MuhasibiMiddleware:
         """
         Add seed evidence floor for broad/synthesis intents.
         
-        This ensures global_synthesis, guidance_framework_chat, and natural_chat
-        never abstain with 0 citations due to missing entity anchors.
+        Uses cached, deterministic seed bundles to prevent:
+        - Nondeterminism from varying DB query results
+        - "Warmup variance" causing false abstentions
         
-        Seeds:
-        - 5 pillar definition chunks (one per pillar)
-        - Top 5 bridge notes
-        - Top 5 cross-pillar edges with justification spans
+        Seeds (cached on first load):
+        - 5 pillar definition chunks (one per pillar, deterministic order)
+        - Top 10 cross-pillar edges (deterministic order by edge_id)
+        - Policy packet for system_limits_policy intent
         """
-        from sqlalchemy import text
+        from apps.api.retrieve.seed_cache import (
+            SeedCache, load_global_seed_bundle, get_policy_packet
+        )
         import logging
         
         logger = logging.getLogger(__name__)
+        cache = SeedCache.get_instance()
         
+        # Get or load the global seed bundle (cached after first load)
+        bundle = cache.get_global_bundle()
+        if bundle is None:
+            try:
+                bundle = await load_global_seed_bundle(session)
+                cache.set_global_bundle(bundle)
+                logger.debug("Loaded and cached global seed bundle")
+            except Exception as e:
+                logger.warning(f"Failed to load seed bundle: {e}")
+                bundle = None
+        
+        if bundle is None or bundle.is_empty:
+            logger.warning("Seed bundle is empty or failed to load")
+            return
+        
+        # Add seed packets (deterministic order from cache)
         existing_chunk_ids = {p.get("chunk_id") for p in ctx.evidence_packets if p.get("chunk_id")}
         
-        try:
-            # 1. Fetch pillar definition chunks (one per pillar)
-            # chunk table uses entity_type + entity_id (not pillar_id)
-            pillar_rows = (await session.execute(text("""
-                SELECT DISTINCT ON (c.entity_id)
-                    c.chunk_id as chunk_id,
-                    c.text_ar,
-                    c.chunk_type,
-                    p.id as pillar_id,
-                    p.name_ar as pillar_name_ar
-                FROM chunk c
-                JOIN pillar p ON c.entity_id = p.id
-                WHERE c.entity_type = 'pillar' AND c.chunk_type = 'definition'
-                ORDER BY c.entity_id, c.chunk_id
-                LIMIT 5
-            """))).fetchall()
-            
-            for row in pillar_rows:
-                cid = str(row.chunk_id)
-                if cid not in existing_chunk_ids:
-                    ctx.evidence_packets.append({
-                        "chunk_id": cid,
-                        "text_ar": row.text_ar,
-                        "chunk_type": row.chunk_type,
-                        "entity_type": "pillar",
-                        "entity_id": str(row.pillar_id),
-                        "entity_name_ar": row.pillar_name_ar,
-                        "source": "seed_floor",
-                    })
-                    existing_chunk_ids.add(cid)
-            
-        except Exception as e:
-            logger.warning(f"Seed retrieval floor pillar fetch failed: {e}")
+        for packet in bundle.all_packets:
+            cid = packet.get("chunk_id")
+            if cid and cid not in existing_chunk_ids:
+                ctx.evidence_packets.append(packet.copy())
+                existing_chunk_ids.add(cid)
         
-        # 2. Fetch cross-pillar edges as seeds (alternative to scholar_note table)
-        try:
-            edge_rows = (await session.execute(text("""
-                SELECT 
-                    e.edge_id,
-                    e.relation_type,
-                    e.from_entity_id,
-                    e.to_entity_id,
-                    ej.quote as justification_quote,
-                    c.chunk_id as source_chunk_id,
-                    c.text_ar as chunk_text_ar
-                FROM edge e
-                LEFT JOIN edge_justification_span ej ON ej.edge_id = e.edge_id
-                LEFT JOIN chunk c ON c.chunk_id = ej.chunk_id
-                WHERE e.from_entity_type = 'pillar' AND e.to_entity_type = 'pillar'
-                ORDER BY e.created_at DESC
-                LIMIT 10
-            """))).fetchall()
-            
-            for row in edge_rows:
-                edge_id = f"edge_{row.edge_id}"
-                if edge_id not in existing_chunk_ids:
-                    text_ar = row.justification_quote or row.chunk_text_ar or f"({row.relation_type}) {row.from_entity_id} → {row.to_entity_id}"
-                    ctx.evidence_packets.append({
-                        "chunk_id": edge_id,
-                        "text_ar": text_ar,
-                        "chunk_type": "cross_pillar_edge",
-                        "source": "seed_floor",
-                        "edge_id": str(row.edge_id),
-                    })
-                    existing_chunk_ids.add(edge_id)
-        except Exception as e:
-            # Edges table may not exist or have different schema - this is optional
-            logger.debug(f"Seed retrieval floor edge fetch skipped: {e}")
-        
-        # 3. For system_limits_policy, add a policy response packet
+        # For system_limits_policy, add policy response packet
         try:
             intent = getattr(ctx, "intent", None) or {}
-            intent_type = str(intent.get("intent_type") or "")
-            if intent_type == "system_limits_policy":
-                policy_packet = {
-                    "chunk_id": "system_policy_response",
-                    "text_ar": (
-                        "حدود الربط في النظام:\n"
-                        "1. لا يُنشئ النظام روابط سببية بين الركائز إلا إذا وُجد نص صريح يدعمها.\n"
-                        "2. عند عدم وجود نص، يُصرّح بذلك: \"غير منصوص عليه في الإطار\".\n"
-                        "3. الروابط المُستنتجة تُوثّق بمصدرها وتُعلَّم بدرجة الثقة.\n"
-                        "4. لا يُصدر النظام أحكامًا فقهية أو طبية أو نفسية سريرية."
-                    ),
-                    "chunk_type": "system_policy",
-                    "source": "system_policy",
-                    "no_cite_required": True,
-                }
+            intent_type_val = str(intent.get("intent_type") or "")
+            if intent_type_val == "system_limits_policy":
+                policy_packet = get_policy_packet()
                 if policy_packet["chunk_id"] not in existing_chunk_ids:
                     ctx.evidence_packets.insert(0, policy_packet)
         except Exception:
