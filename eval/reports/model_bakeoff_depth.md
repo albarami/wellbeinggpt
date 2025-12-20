@@ -1,6 +1,6 @@
 ## System Depth Bakeoff (Full Muḥāsibī)
 
-- **Generated**: 2025-12-19T04:59:17.353869Z
+- **Generated**: 2025-12-20T10:58:54.109525Z
 - **Dataset**: `eval/datasets/bakeoff_depth_v1.jsonl`
 - **Dataset sha256**: `8331d935a61e5e1ded4b12d672221e3df57e23c7479338f274c1489c6c0a1aca`
 - **Controls**: seed=1337, temp=0.1, max_tokens=1500, prompts_version=v1

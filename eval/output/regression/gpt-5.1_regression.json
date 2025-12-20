@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-12-20T09:29:32.310318",
+  "timestamp": "2025-12-20T10:18:46.140126",
   "dataset": "D:\\wellbeingqa\\eval\\datasets\\regression_unexpected_fails.jsonl",
   "deployment": "gpt-5.1",
   "total": 10,
@@ -42,7 +42,7 @@
       "type": "natural_chat",
       "mode_used": "natural_chat",
       "contract_outcome": "PASS_FULL",
-      "citations_count": 5,
+      "citations_count": 6,
       "edges_count": 0,
       "abstained": false,
       "success": true

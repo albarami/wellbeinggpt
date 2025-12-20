@@ -569,10 +569,23 @@ class MuhasibiMiddleware:
                 "global_synthesis", "cross_pillar", "network_build",
                 "compare", "world_model", "guidance_framework_chat",
             }
-            if intent_type not in synthesis_intents:
+            
+            # SAFEGUARD: If truly catastrophic (0 packets AND seed cache empty),
+            # still abstain even for synthesis intents. This prevents weird outputs
+            # during DB outages or cache failures.
+            from apps.api.retrieve.seed_cache import SeedCache
+            seed_cache = SeedCache.get_instance()
+            seed_bundle = seed_cache.get_global_bundle()
+            catastrophic_failure = (
+                seed_bundle is None or seed_bundle.is_empty
+            )
+            
+            if intent_type not in synthesis_intents or catastrophic_failure:
                 ctx.account_issues.append("لا توجد أدلة متاحة")
                 ctx.citation_valid = False
                 ctx.not_found = True
+                if catastrophic_failure and intent_type in synthesis_intents:
+                    ctx.account_issues.append("فشل تحميل البذور الأساسية - يُرجى المحاولة لاحقًا")
                 return MuhasibiState.INTERPRET  # Skip to interpret with not_found
 
         # Check for definition

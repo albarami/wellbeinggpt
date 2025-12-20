@@ -19,6 +19,7 @@ Usage:
 
 import os
 import sys
+import io
 import time
 import json
 import re
@@ -27,6 +28,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+# Fix Windows console encoding for Arabic text
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # Load .env
 env_path = Path(__file__).resolve().parents[1] / ".env"

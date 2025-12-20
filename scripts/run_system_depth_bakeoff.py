@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import io
 import json
 import os
 import sys
@@ -39,6 +40,11 @@ from datetime import datetime
 from pathlib import Path
 from statistics import median
 from typing import Any, Optional
+
+# Fix Windows console encoding for Arabic text
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 import requests
 from dotenv import load_dotenv
