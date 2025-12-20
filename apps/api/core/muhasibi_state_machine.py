@@ -339,6 +339,11 @@ class MuhasibiMiddleware:
 
         This is a non-LLM state that retrieves evidence.
         """
+        # Extract intent_type at method level for reranker policy decisions
+        intent_type = None
+        if hasattr(ctx, "intent") and ctx.intent:
+            intent_type = ctx.intent.get("intent_type")
+        
         if self.retriever:
             try:
                 # Best-effort retrieval; retriever opens DB session internally if provided as callable.
@@ -346,11 +351,13 @@ class MuhasibiMiddleware:
                 retrieve_fn = getattr(self.retriever, "retrieve", None)
                 if retrieve_fn and hasattr(self.retriever, "_session") and self.retriever._session:
                     session = self.retriever._session
+                    
                     merge = await self.retriever.retrieve(
                         session,
                         RetrievalInputs(
                             query=ctx.question,
                             resolved_entities=ctx.detected_entities,
+                            intent=intent_type,
                         ),
                     )
                     ctx.evidence_packets = merge.evidence_packets
@@ -387,7 +394,7 @@ class MuhasibiMiddleware:
                         try:
                             merge2 = await self.retriever.retrieve(
                                 session,
-                                RetrievalInputs(query=q, resolved_entities=ctx.detected_entities),
+                                RetrievalInputs(query=q, resolved_entities=ctx.detected_entities, intent=intent_type),
                             )
                             extra_packets.extend(merge2.evidence_packets)
                         except Exception:
@@ -424,6 +431,7 @@ class MuhasibiMiddleware:
                                 RetrievalInputs(
                                     query=str(q),
                                     resolved_entities=ctx.detected_entities,
+                                    intent=intent_type,
                                 ),
                             )
                             extra_packets.extend(merge.evidence_packets)

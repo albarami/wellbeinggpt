@@ -31,6 +31,9 @@ class MergeResult:
     has_evidence: bool
     # Deterministic retrieval trace (ranked final list).
     ranked_chunks: list[dict[str, Any]] = field(default_factory=list)
+    # Reranker decision info (for observability)
+    reranker_used: bool = False
+    reranker_decision: str = ""
 
 
 class MergeRanker:

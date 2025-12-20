@@ -1,0 +1,139 @@
+{
+  "timestamp": "2025-12-20T06:06:14.436850",
+  "n_runs": 10,
+  "reranker": "OFF",
+  "run_summaries": [
+    {
+      "run": 1,
+      "passed": 9,
+      "failed": 1,
+      "pass_rate": 0.9
+    },
+    {
+      "run": 2,
+      "passed": 9,
+      "failed": 1,
+      "pass_rate": 0.9
+    },
+    {
+      "run": 3,
+      "passed": 9,
+      "failed": 1,
+      "pass_rate": 0.9
+    },
+    {
+      "run": 4,
+      "passed": 8,
+      "failed": 2,
+      "pass_rate": 0.8
+    },
+    {
+      "run": 5,
+      "passed": 9,
+      "failed": 1,
+      "pass_rate": 0.9
+    },
+    {
+      "run": 6,
+      "passed": 9,
+      "failed": 1,
+      "pass_rate": 0.9
+    },
+    {
+      "run": 7,
+      "passed": 10,
+      "failed": 0,
+      "pass_rate": 1.0
+    },
+    {
+      "run": 8,
+      "passed": 10,
+      "failed": 0,
+      "pass_rate": 1.0
+    },
+    {
+      "run": 9,
+      "passed": 9,
+      "failed": 1,
+      "pass_rate": 0.9
+    },
+    {
+      "run": 10,
+      "passed": 10,
+      "failed": 0,
+      "pass_rate": 1.0
+    }
+  ],
+  "stability_report": [
+    {
+      "qid": "synth-006",
+      "pass_count": 3,
+      "fail_count": 7,
+      "status": "FLAKY",
+      "pass_rate": 0.3
+    },
+    {
+      "qid": "bound-009",
+      "pass_count": 10,
+      "fail_count": 0,
+      "status": "STABLE_PASS",
+      "pass_rate": 1.0
+    },
+    {
+      "qid": "chat-011",
+      "pass_count": 10,
+      "fail_count": 0,
+      "status": "STABLE_PASS",
+      "pass_rate": 1.0
+    },
+    {
+      "qid": "chat-019",
+      "pass_count": 10,
+      "fail_count": 0,
+      "status": "STABLE_PASS",
+      "pass_rate": 1.0
+    },
+    {
+      "qid": "synth-034",
+      "pass_count": 10,
+      "fail_count": 0,
+      "status": "STABLE_PASS",
+      "pass_rate": 1.0
+    },
+    {
+      "qid": "synth-039",
+      "pass_count": 10,
+      "fail_count": 0,
+      "status": "STABLE_PASS",
+      "pass_rate": 1.0
+    },
+    {
+      "qid": "cross-001",
+      "pass_count": 9,
+      "fail_count": 1,
+      "status": "FLAKY",
+      "pass_rate": 0.9
+    },
+    {
+      "qid": "cross-033",
+      "pass_count": 10,
+      "fail_count": 0,
+      "status": "STABLE_PASS",
+      "pass_rate": 1.0
+    },
+    {
+      "qid": "bound-018",
+      "pass_count": 10,
+      "fail_count": 0,
+      "status": "STABLE_PASS",
+      "pass_rate": 1.0
+    },
+    {
+      "qid": "chat-002",
+      "pass_count": 10,
+      "fail_count": 0,
+      "status": "STABLE_PASS",
+      "pass_rate": 1.0
+    }
+  ]
+}

@@ -23,6 +23,7 @@ from apps.api.retrieve.sql_retriever import get_chunks_with_refs
 from apps.api.retrieve.graph_retriever import expand_graph
 from apps.api.retrieve.vector_retriever import VectorRetriever
 from apps.api.retrieve.reranker import Reranker, create_reranker_from_env
+from apps.api.retrieve.reranker_policy import should_use_reranker, get_reranker_decision_reason
 
 
 @dataclass
@@ -33,6 +34,7 @@ class RetrievalInputs:
     resolved_entities: list[dict[str, Any]]
     top_k: int = 10
     graph_depth: int = 2
+    intent: Optional[str] = None  # For reranker policy decisions
 
 
 class HybridRetriever:
@@ -284,9 +286,37 @@ class HybridRetriever:
         )
 
         # Optional reranker pass (top-N reordering).
-        # reranker_override: None=use default, True=force on, False=force off
+        # Policy: Use per-intent gating based on A/B test results
+        # - Global reranker hurts overall (-3.7% PASS_FULL)
+        # - Reranker helps synthesis (synth-006: 30% → 100%)
         try:
-            use_reranker = self.reranker.is_enabled() if reranker_override is None else reranker_override
+            # Extract retrieval quality metrics for conditional decisions
+            retrieval_scores = [float(rc.get("score") or 0.0) for rc in (merged.ranked_chunks or [])]
+            retrieval_sources = [str(rc.get("backend") or "") for rc in (merged.ranked_chunks or [])]
+            
+            # Determine if reranker should be used
+            if reranker_override is not None:
+                # Explicit override (for A/B testing)
+                use_reranker = reranker_override
+            elif not self.reranker or not self.reranker.is_enabled():
+                # Reranker not available or globally disabled
+                use_reranker = False
+            else:
+                # Use policy-based decision
+                use_reranker = should_use_reranker(
+                    intent=inputs.intent,
+                    retrieval_scores=retrieval_scores,
+                    retrieval_sources=retrieval_sources,
+                )
+            
+            # Store decision reason for observability
+            merged.reranker_decision = get_reranker_decision_reason(
+                intent=inputs.intent,
+                retrieval_scores=retrieval_scores,
+                retrieval_sources=retrieval_sources,
+            )
+            merged.reranker_used = use_reranker
+            
             if self.reranker and use_reranker and merged.evidence_packets:
                 alpha = float(os.getenv("RERANKER_ALPHA", "0.25") or 0.25)
                 alpha = max(0.0, min(alpha, 1.0))

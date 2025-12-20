@@ -1,0 +1,13 @@
+{
+  "total": 160,
+  "passed": 151,
+  "pass_rate": 0.94375,
+  "pass_full": 150,
+  "pass_full_rate": 0.9375,
+  "citation_present_rate": 0.94375,
+  "mean_citations": 8.29375,
+  "mean_edges": 4.525,
+  "mean_chains": 4.525,
+  "boundary_rate": 0.4125,
+  "unexpected_fail_rate": 0.05625
+}

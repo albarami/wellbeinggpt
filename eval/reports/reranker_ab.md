@@ -1,6 +1,6 @@
 # Reranker A/B Test Report
 
-Generated: 2025-12-20
+Generated: 2025-12-20 (Updated after full bakeoff)
 Deployment: gpt-5.1
 Reranker Model: `checkpoints/reranker/final` (8×A100 trained, 5,600 pairs)
 
@@ -8,47 +8,51 @@ Reranker Model: `checkpoints/reranker/final` (8×A100 trained, 5,600 pairs)
 
 The reranker was trained on 8× NVIDIA A100-SXM4-80GB GPUs in 69 seconds using DataParallel.
 
-### Regression Test Results
+### Full Bakeoff Results (160 questions)
 
-| Condition | Pass Rate | Notes |
-|-----------|-----------|-------|
-| Reranker ON | 100% (10/10) | All PASS_FULL |
-| Reranker OFF | 90% (9/10) | synth-006 failed (transient) |
+| Metric | Reranker OFF | Reranker ON | Delta |
+|--------|--------------|-------------|-------|
+| **PASS_FULL Rate** | 97.5% | 93.8% | **-3.7%** |
+| Pass Rate (any) | 97.5% | 94.4% | -3.1% |
+| Mean Citations | 8.5 | 8.3 | -0.2 |
+| Mean Used Edges | 4.6 | 4.5 | -0.1 |
+| Unexpected Fail Rate | 2.5% | 5.6% | +3.1% |
 
-### Key Observations
+### Regression Stability Results (10 runs, synth-006)
 
-1. **Reranker is functional**: Correctly ranks relevant documents 3x higher than irrelevant ones in unit tests
-2. **Integration successful**: Reranker is properly integrated into the HybridRetriever pipeline
-3. **No regression**: Pass rate maintained or improved with reranker enabled
+| Condition | synth-006 Pass Rate |
+|-----------|---------------------|
+| Reranker OFF | 30% (3/10) |
+| Reranker ON | 100% (10/10) |
 
-### Reranker Test Results
+## Key Finding: Mixed Effects
 
-```
-Test 1: pos=0.54 vs neg=0.18 (relevant 3x higher)
-Test 2: pos=0.58 vs neg=0.22 (relevant 2.6x higher)
-Test 3: pos=0.58 vs neg=0.22 (relevant 2.6x higher)
-Accuracy: 100%
-```
+The reranker has **opposite effects** on different question types:
+
+1. **Hurts overall bakeoff** (-3.7% PASS_FULL)
+2. **Helps synthesis questions** (synth-006: 30% → 100%)
+
+### Root Cause
+
+The reranker may be:
+- Over-filtering good evidence for simple questions
+- Rescuing synthesis questions that need better evidence ranking
 
 ## Recommendation
 
-**Enable reranker in production** (`RERANKER_ENABLED=true`).
+**Disable reranker globally. Enable per-intent for synthesis.**
 
-The trained reranker:
-- Improves evidence ranking quality
-- No significant latency impact observed
-- Maintains 100% regression pass rate
-
-## Configuration
-
-Add to `.env`:
+```env
+# Production default
+RERANKER_ENABLED=false
 ```
-RERANKER_ENABLED=true
-RERANKER_MODEL_PATH=checkpoints/reranker/final
-```
+
+Enable selectively for:
+- `global_synthesis` intent
+- `cross_pillar` with low evidence scores
 
 ## Next Steps
 
-1. Run full depth bakeoff (160 questions) with reranker ON
-2. Compare depth metrics: used_edges, argument_chains, citation quality
-3. Consider training on larger dataset (50k+ pairs) for further improvement
+1. **Train on more data** (50k+ pairs with hard negatives)
+2. **Tune threshold** - current reranker may be too aggressive
+3. **Implement intent-based routing** for reranker activation
