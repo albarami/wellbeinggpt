@@ -425,6 +425,7 @@ class ScholarReasoner:
                     packets=packets,
                     semantic_edges=semantic_edges,
                     max_links=5,
+                    query=question,
                 )
             elif intent == "tension":
                 answer_ar, citations, used_edges = compose_tension_answer(
@@ -544,6 +545,7 @@ class ScholarReasoner:
                         packets=packets2,
                         semantic_edges=semantic_edges2,
                         max_links=6,
+                        query=question,
                     )
                 elif intent == "tension":
                     answer_ar, citations, used_edges = compose_tension_answer(

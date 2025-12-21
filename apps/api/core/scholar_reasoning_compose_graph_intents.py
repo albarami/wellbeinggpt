@@ -8,9 +8,66 @@ Handles:
 
 from __future__ import annotations
 
-from typing import Any
+import logging
+import os
+from typing import Any, Optional
 
 from apps.api.core.schemas import Citation
+
+logger = logging.getLogger(__name__)
+
+# Edge scorer integration
+_edge_scorer_cache: dict[str, Any] = {"scorer": None, "checked": False}
+
+
+def _get_edge_scorer():
+    """Get edge scorer if enabled and available."""
+    if _edge_scorer_cache["checked"]:
+        return _edge_scorer_cache["scorer"]
+    
+    _edge_scorer_cache["checked"] = True
+    
+    try:
+        enabled = os.getenv("EDGE_SCORER_ENABLED", "false").lower() in {"1", "true", "yes"}
+        if not enabled:
+            return None
+        
+        from apps.api.graph.edge_scorer import get_edge_scorer
+        scorer = get_edge_scorer()
+        if scorer.is_enabled():
+            _edge_scorer_cache["scorer"] = scorer
+            logger.info("Edge scorer loaded for graph intents")
+            return scorer
+    except Exception as e:
+        logger.warning(f"Edge scorer not available: {e}")
+    
+    return None
+
+
+def _apply_edge_scorer(
+    edges: list[dict[str, Any]],
+    query: str,
+) -> list[dict[str, Any]]:
+    """
+    Apply edge scorer to rank edges if available.
+    Falls back to original order if scorer unavailable.
+    """
+    scorer = _get_edge_scorer()
+    if not scorer or not edges:
+        return edges
+    
+    try:
+        scored = scorer.score_edges_batch(query, edges)
+        # Return edges in score order, with scores attached
+        result = []
+        for edge, score in scored:
+            edge_copy = edge.copy()
+            edge_copy["edge_score"] = score
+            result.append(edge_copy)
+        return result
+    except Exception as e:
+        logger.warning(f"Edge scoring failed: {e}")
+        return edges
 
 
 def _cite_span(citations: list[Citation], span: dict[str, Any]) -> None:
@@ -211,20 +268,36 @@ def compose_network_answer(
     packets: list[dict[str, Any]],
     semantic_edges: list[dict[str, Any]],
     max_links: int = 5,
+    query: Optional[str] = None,
 ) -> tuple[str, list[Citation], list[dict[str, Any]]]:
     """
     Compose a network answer: multiple links with relation_type + per-link evidence.
     
     UPGRADE: Prefers value-level central nodes and value-level cross-pillar links.
     Falls back to pillar-level edges only if value-level edges don't exist.
+    
+    If edge scorer is enabled and query is provided, edges are also scored
+    for relevance to the query.
     """
 
     citations: list[Citation] = []
     used_edges: list[dict[str, Any]] = []
     parts: list[str] = []
+    
+    # Apply edge scorer if available and query provided
+    edges_to_use = semantic_edges or []
+    if query:
+        edges_to_use = _apply_edge_scorer(edges_to_use, query)
 
     # UPGRADE: Sort edges by priority (value-level first, pillar-level last)
-    sorted_edges = sorted(semantic_edges or [], key=_edge_priority)
+    # If edge scorer was applied, use a combined sort: edge_score (if present) + priority
+    def combined_sort_key(ed: dict[str, Any]) -> tuple[float, int]:
+        # Higher edge_score = better (negate for ascending sort)
+        edge_score = ed.get("edge_score", 0.5)
+        priority = _edge_priority(ed)
+        return (-edge_score, priority)
+    
+    sorted_edges = sorted(edges_to_use, key=combined_sort_key)
     
     # Track if we found value-level edges
     has_value_edges = any(_edge_priority(e) < 3 for e in sorted_edges[:max_links * 2])

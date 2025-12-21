@@ -160,6 +160,7 @@ class RetrievalDebugInfo(BaseModel):
     not_found_reason: Optional[str] = None
     intent_type: str = ""
     mode: str = ""
+    edge_scorer_used: bool = False
 
 
 class MuhasibiTraceEvent(BaseModel):
