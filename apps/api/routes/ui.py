@@ -19,7 +19,7 @@ from apps.api.core.database import get_session
 from apps.api.core.answer_contract import build_argument_chains_from_used_edges, check_contract, contract_from_question_runtime
 from apps.api.core.contract_gate import _used_edges_from_middleware
 from apps.api.core.span_resolver import resolve_span_by_sentence_overlap
-from apps.api.core.ui_schemas import AskUiResponse, CitationSpan, GraphTrace, UsedEdge, ArgumentChain, MuhasibiTraceEvent
+from apps.api.core.ui_schemas import AskUiResponse, CitationSpan, GraphTrace, UsedEdge, ArgumentChain, MuhasibiTraceEvent, RetrievalDebugInfo
 from apps.api.retrieve.normalize_ar import normalize_for_matching
 
 # Reuse AskRequest and the shared runner from /ask to guarantee no divergence.
@@ -247,6 +247,18 @@ async def ask_ui(request: AskRequest):
             ],
         )
 
+        # Build retrieval debug info for observability
+        retrieval_debug = RetrievalDebugInfo(
+            reranker_used=bool(getattr(ctx, "reranker_used", False)) if ctx else False,
+            reranker_reason=str(getattr(ctx, "reranker_reason", "")) if ctx else "",
+            seed_floor_applied=bool(getattr(ctx, "seed_floor_applied", False)) if ctx else False,
+            seed_floor_packets_count=int(getattr(ctx, "seed_floor_packets_count", 0)) if ctx else 0,
+            bypass_relevance_gate=bool(getattr(ctx, "bypass_relevance_gate", False)) if ctx else False,
+            not_found_reason=str(getattr(ctx, "not_found_reason", "")) if ctx and getattr(ctx, "not_found_reason", None) else None,
+            intent_type=str((getattr(ctx, "intent", None) or {}).get("intent_type", "")) if ctx else "",
+            mode=str(getattr(ctx, "mode", "")) if ctx else "",
+        )
+        
         resp = AskUiResponse(
             request_id=request_id,
             latency_ms=latency_ms,
@@ -259,6 +271,7 @@ async def ask_ui(request: AskRequest):
             citations_spans=spans,
             graph_trace=graph_trace,
             muhasibi_trace=[MuhasibiTraceEvent(**t) for t in (trace or [])],
+            retrieval_debug=retrieval_debug,
             truncated_fields=truncated_fields,
             original_counts=original_counts,
             final=final,

@@ -74,3 +74,8 @@ data/derived/
 !tests/fixtures/*.docx
 !docs/source/*.docx
 
+# Large model files
+checkpoints/
+*.pt
+*.pth
+data/phase2/*.jsonl

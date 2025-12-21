@@ -1,6 +1,6 @@
 ## Bakeoff Sanity Gate Report
 
-- **Generated**: 2025-12-20T11:49:03.476943Z
+- **Generated**: 2025-12-20T16:14:37.000876Z
 - **Status**: ✅ PASSED
 - **Dataset**: `eval/datasets/bakeoff_sanity_gate_v1.jsonl`
 - **Dataset hash**: `db3eeef7d81be1fd`

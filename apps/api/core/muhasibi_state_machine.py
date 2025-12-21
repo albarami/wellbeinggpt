@@ -78,6 +78,14 @@ class StateContext:
     evidence_packets: list[dict] = field(default_factory=list)
     has_definition: bool = False
     has_evidence: bool = False
+    
+    # Retrieval debug info (for diagnosing abstentions)
+    reranker_used: bool = False
+    reranker_reason: str = ""
+    seed_floor_applied: bool = False
+    seed_floor_packets_count: int = 0
+    bypass_relevance_gate: bool = False
+    not_found_reason: Optional[str] = None
 
     # ACCOUNT outputs
     citation_valid: bool = False
@@ -358,8 +366,12 @@ class MuhasibiMiddleware:
                             query=ctx.question,
                             resolved_entities=ctx.detected_entities,
                             intent=intent_type,
+                            mode=ctx.mode,
                         ),
                     )
+                    # Track reranker decision for observability
+                    ctx.reranker_used = getattr(merge, "reranker_used", False)
+                    ctx.reranker_reason = getattr(merge, "reranker_decision", "")
                     ctx.evidence_packets = merge.evidence_packets
                     ctx.has_definition = merge.has_definition
                     ctx.has_evidence = merge.has_evidence
@@ -394,7 +406,7 @@ class MuhasibiMiddleware:
                         try:
                             merge2 = await self.retriever.retrieve(
                                 session,
-                                RetrievalInputs(query=q, resolved_entities=ctx.detected_entities, intent=intent_type),
+                                RetrievalInputs(query=q, resolved_entities=ctx.detected_entities, intent=intent_type, mode=ctx.mode),
                             )
                             extra_packets.extend(merge2.evidence_packets)
                         except Exception:
@@ -432,6 +444,7 @@ class MuhasibiMiddleware:
                                     query=str(q),
                                     resolved_entities=ctx.detected_entities,
                                     intent=intent_type,
+                                    mode=ctx.mode,
                                 ),
                             )
                             extra_packets.extend(merge.evidence_packets)
@@ -459,8 +472,11 @@ class MuhasibiMiddleware:
             intent_type = str(intent.get("intent_type") or "")
             mode = getattr(ctx, "mode", "") or ""
             
+            # ALWAYS apply seed floor for natural_chat mode
+            # Reason: Prevents false abstentions on guidance questions like "how to be a better person"
             needs_seed_floor = (
-                intent_type in {
+                mode == "natural_chat"  # HARD RULE: natural_chat always gets seed floor
+                or intent_type in {
                     "system_limits_policy",
                     "guidance_framework_chat",
                     "global_synthesis",
@@ -471,7 +487,6 @@ class MuhasibiMiddleware:
                 }
                 or intent.get("requires_seed_retrieval")
                 or intent.get("bypass_relevance_gate")
-                or (mode == "natural_chat" and not ctx.detected_entities)
             )
             
             if needs_seed_floor and self.retriever and hasattr(self.retriever, "_session") and self.retriever._session:
@@ -531,12 +546,20 @@ class MuhasibiMiddleware:
         
         # Add seed packets (deterministic order from cache)
         existing_chunk_ids = {p.get("chunk_id") for p in ctx.evidence_packets if p.get("chunk_id")}
+        added_count = 0
         
         for packet in bundle.all_packets:
             cid = packet.get("chunk_id")
             if cid and cid not in existing_chunk_ids:
                 ctx.evidence_packets.append(packet.copy())
                 existing_chunk_ids.add(cid)
+                added_count += 1
+        
+        # Track seed floor application for observability
+        ctx.seed_floor_applied = True
+        ctx.seed_floor_packets_count = added_count
+        ctx.bypass_relevance_gate = True  # Always bypass relevance gate when seed floor applied
+        logger.debug(f"Seed floor applied: {added_count} packets added")
         
         # For system_limits_policy, add policy response packet
         try:
@@ -559,34 +582,52 @@ class MuhasibiMiddleware:
 
         # Check if we have any evidence
         if not ctx.evidence_packets:
-            # For synthesis intents, don't set not_found even if empty
-            # Reason: synthesis questions can sometimes get 0 evidence due to
-            # flaky retrieval, but the bypass in apply_question_evidence_relevance_gate
-            # should prevent false abstention. Also, seed floor should have added seeds.
             intent = getattr(ctx, "intent", None) or {}
             intent_type = str(intent.get("intent_type") or "")
-            synthesis_intents = {
+            mode = getattr(ctx, "mode", "") or ""
+            
+            # Intents/modes that should never abstain due to 0 evidence
+            # Reason: These rely on seed floor which should have been applied
+            bypass_intents = {
                 "global_synthesis", "cross_pillar", "network_build",
                 "compare", "world_model", "guidance_framework_chat",
             }
             
-            # SAFEGUARD: If truly catastrophic (0 packets AND seed cache empty),
-            # still abstain even for synthesis intents. This prevents weird outputs
-            # during DB outages or cache failures.
-            from apps.api.retrieve.seed_cache import SeedCache
-            seed_cache = SeedCache.get_instance()
-            seed_bundle = seed_cache.get_global_bundle()
-            catastrophic_failure = (
-                seed_bundle is None or seed_bundle.is_empty
-            )
-            
-            if intent_type not in synthesis_intents or catastrophic_failure:
+            # HARD RULE: If seed floor was applied OR bypass_relevance_gate is set,
+            # never set not_found. This prevents false abstentions.
+            if ctx.seed_floor_applied or ctx.bypass_relevance_gate:
+                # Seed floor was applied but still no packets = catastrophic failure
+                from apps.api.retrieve.seed_cache import SeedCache
+                seed_cache = SeedCache.get_instance()
+                seed_bundle = seed_cache.get_global_bundle()
+                if seed_bundle is None or seed_bundle.is_empty:
+                    ctx.account_issues.append("فشل تحميل البذور الأساسية - يُرجى المحاولة لاحقًا")
+                    ctx.not_found = True
+                    ctx.not_found_reason = "catastrophic_seed_failure"
+                    return MuhasibiState.INTERPRET
+                # Otherwise, don't abstain - proceed with whatever we have
+                pass
+            elif intent_type in bypass_intents or mode == "natural_chat":
+                # Should have had seed floor applied but didn't get any packets
+                # Check for catastrophic failure
+                from apps.api.retrieve.seed_cache import SeedCache
+                seed_cache = SeedCache.get_instance()
+                seed_bundle = seed_cache.get_global_bundle()
+                if seed_bundle is None or seed_bundle.is_empty:
+                    ctx.account_issues.append("لا توجد أدلة متاحة")
+                    ctx.citation_valid = False
+                    ctx.not_found = True
+                    ctx.not_found_reason = "catastrophic_seed_failure"
+                    ctx.account_issues.append("فشل تحميل البذور الأساسية - يُرجى المحاولة لاحقًا")
+                    return MuhasibiState.INTERPRET
+                # Otherwise don't abstain - seed floor should have been applied
+            else:
+                # Non-bypass intent with no evidence = abstain
                 ctx.account_issues.append("لا توجد أدلة متاحة")
                 ctx.citation_valid = False
                 ctx.not_found = True
-                if catastrophic_failure and intent_type in synthesis_intents:
-                    ctx.account_issues.append("فشل تحميل البذور الأساسية - يُرجى المحاولة لاحقًا")
-                return MuhasibiState.INTERPRET  # Skip to interpret with not_found
+                ctx.not_found_reason = "no_evidence_no_bypass"
+                return MuhasibiState.INTERPRET
 
         # Check for definition
         if not ctx.has_definition:

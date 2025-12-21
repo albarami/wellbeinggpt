@@ -145,6 +145,23 @@ class MechanismTrace(BaseModel):
     covered_pillars: list[str] = Field(default_factory=list)
 
 
+class RetrievalDebugInfo(BaseModel):
+    """
+    Retrieval/gating debug info for observability.
+    
+    Reason: Required to diagnose false abstentions and routing issues.
+    """
+    
+    reranker_used: bool = False
+    reranker_reason: str = Field(default="", description="intent-based | low-confidence | disabled")
+    seed_floor_applied: bool = False
+    seed_floor_packets_count: int = 0
+    bypass_relevance_gate: bool = False
+    not_found_reason: Optional[str] = None
+    intent_type: str = ""
+    mode: str = ""
+
+
 class MuhasibiTraceEvent(BaseModel):
     """
     Safe Muḥāsibī flow event (no chain-of-thought).
@@ -197,6 +214,9 @@ class AskUiResponse(BaseModel):
     graph_trace: GraphTrace = Field(default_factory=GraphTrace)
     mechanism_trace: MechanismTrace = Field(default_factory=MechanismTrace)
     muhasibi_trace: list[MuhasibiTraceEvent] = Field(default_factory=list)
+    
+    # Retrieval/gating debug info for diagnosing abstentions
+    retrieval_debug: RetrievalDebugInfo = Field(default_factory=RetrievalDebugInfo)
 
     truncated_fields: dict[str, Any] = Field(default_factory=dict)
     original_counts: dict[str, Any] = Field(default_factory=dict)

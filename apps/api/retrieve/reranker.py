@@ -100,14 +100,33 @@ class CrossEncoderReranker:
 
 
 def create_reranker_from_env() -> Reranker:
+    """
+    Create reranker based on environment configuration.
+    
+    Modes:
+    - RERANKER_ENABLED=true: Load model, apply to all requests (deprecated)
+    - RERANKER_ENABLED=false + RERANKER_SELECTIVE_MODE=true: Load model, 
+      apply per-intent policy
+    - RERANKER_ENABLED=false + RERANKER_SELECTIVE_MODE=false: No reranker
+    
+    Reason: Selective mode allows per-intent gating without global enablement.
+    """
     enabled = os.getenv("RERANKER_ENABLED", "false").lower() in {"1", "true", "yes"}
-    if not enabled:
+    selective_mode = os.getenv("RERANKER_SELECTIVE_MODE", "false").lower() in {"1", "true", "yes"}
+    
+    # Load model if either enabled or selective mode
+    if not enabled and not selective_mode:
         return NullReranker()
+    
     model_path = (os.getenv("RERANKER_MODEL_PATH") or "").strip()
     if not model_path:
         return NullReranker()
+    
     try:
-        return CrossEncoderReranker(model_path=model_path)
+        reranker = CrossEncoderReranker(model_path=model_path)
+        # For selective mode, we load but don't mark globally enabled
+        # The hybrid_retriever will check the policy
+        return reranker
     except Exception:
         return NullReranker()
 

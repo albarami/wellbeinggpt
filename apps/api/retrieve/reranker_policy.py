@@ -54,7 +54,8 @@ def should_use_reranker(
     retrieval_sources: Optional[list[str]] = None,
     force_on: bool = False,
     force_off: bool = False,
-) -> bool:
+    mode: Optional[str] = None,
+) -> tuple[bool, str]:
     """
     Determine whether to use the reranker for this request.
     
@@ -64,41 +65,56 @@ def should_use_reranker(
         retrieval_sources: List of source identifiers from retrieval
         force_on: Override to always enable
         force_off: Override to always disable
+        mode: The question mode (natural_chat, answer, etc.)
     
     Returns:
-        bool: True if reranker should be used
+        tuple[bool, str]: (should_use, reason)
     
     Reason: Per-intent gating based on A/B test results showing reranker helps
     synthesis but hurts overall breadth.
     """
     # Handle explicit overrides
     if force_off:
-        return False
+        return False, "force_off"
     if force_on:
-        return True
+        return True, "force_on"
+    
+    # HARD RULE: natural_chat mode NEVER uses reranker
+    # Reason: A/B test showed reranker causes regression on natural_chat questions
+    mode_lower = (mode or "").lower().strip()
+    if mode_lower == "natural_chat":
+        logger.debug(f"Reranker OFF: mode=natural_chat (hard rule)")
+        return False, "mode_natural_chat"
     
     # Normalize intent
     intent_lower = (intent or "").lower().strip()
     
+    # HARD RULE: guidance_framework_chat NEVER uses reranker
+    if intent_lower == "guidance_framework_chat":
+        logger.debug(f"Reranker OFF: intent=guidance_framework_chat (hard rule)")
+        return False, "intent_guidance_chat"
+    
     # Check ALWAYS_RERANK intents
     if intent_lower in ALWAYS_RERANK_INTENTS or intent in ALWAYS_RERANK_INTENTS:
         logger.debug(f"Reranker ON: intent '{intent}' in ALWAYS_RERANK")
-        return True
+        return True, f"always_rerank_intent_{intent_lower}"
     
     # Check NO_RERANK intents
     if intent_lower in NO_RERANK_INTENTS or intent in NO_RERANK_INTENTS:
         logger.debug(f"Reranker OFF: intent '{intent}' in NO_RERANK")
-        return False
+        return False, f"no_rerank_intent_{intent_lower}"
     
     # Check CONDITIONAL intents with retrieval quality triggers
     if intent_lower in CONDITIONAL_RERANK_INTENTS or intent in CONDITIONAL_RERANK_INTENTS:
-        return _check_retrieval_quality_triggers(
+        should_rerank = _check_retrieval_quality_triggers(
             retrieval_scores, retrieval_sources
         )
+        reason = "conditional_triggered" if should_rerank else "conditional_not_triggered"
+        return should_rerank, reason
     
     # Default: don't rerank (conservative, matches OFF baseline)
     logger.debug(f"Reranker OFF: intent '{intent}' not in known lists, using default OFF")
-    return False
+    return False, "default_off"
 
 
 def _check_retrieval_quality_triggers(

@@ -35,6 +35,7 @@ class RetrievalInputs:
     top_k: int = 10
     graph_depth: int = 2
     intent: Optional[str] = None  # For reranker policy decisions
+    mode: Optional[str] = None  # natural_chat, answer, etc.
 
 
 class HybridRetriever:
@@ -295,26 +296,31 @@ class HybridRetriever:
             retrieval_sources = [str(rc.get("backend") or "") for rc in (merged.ranked_chunks or [])]
             
             # Determine if reranker should be used
+            # Supports three modes:
+            # 1. reranker_override=True/False: Explicit A/B test control
+            # 2. RERANKER_ENABLED=true: Always use policy (model loaded)
+            # 3. RERANKER_SELECTIVE_MODE=true: Use policy (model loaded)
+            # 4. Neither enabled: No reranker
+            reranker_reason = "not_loaded"
             if reranker_override is not None:
                 # Explicit override (for A/B testing)
                 use_reranker = reranker_override
+                reranker_reason = "override_on" if reranker_override else "override_off"
             elif not self.reranker or not self.reranker.is_enabled():
-                # Reranker not available or globally disabled
+                # Reranker model not loaded
                 use_reranker = False
+                reranker_reason = "not_loaded"
             else:
-                # Use policy-based decision
-                use_reranker = should_use_reranker(
+                # Reranker model available - use policy-based decision
+                use_reranker, reranker_reason = should_use_reranker(
                     intent=inputs.intent,
                     retrieval_scores=retrieval_scores,
                     retrieval_sources=retrieval_sources,
+                    mode=inputs.mode,
                 )
             
             # Store decision reason for observability
-            merged.reranker_decision = get_reranker_decision_reason(
-                intent=inputs.intent,
-                retrieval_scores=retrieval_scores,
-                retrieval_sources=retrieval_sources,
-            )
+            merged.reranker_decision = reranker_reason
             merged.reranker_used = use_reranker
             
             if self.reranker and use_reranker and merged.evidence_packets:
