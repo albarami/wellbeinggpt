@@ -1,0 +1,14 @@
+{
+  "total": 5147,
+  "positives": 1147,
+  "negatives": 4000,
+  "train_size": 4130,
+  "val_size": 1017,
+  "hard_negative_ratio": 0.55,
+  "negative_breakdown": {
+    "hard_negative": 2200,
+    "confusable": 600,
+    "wrong_relation": 800,
+    "random": 400
+  }
+}
