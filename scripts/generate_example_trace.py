@@ -31,6 +31,8 @@ example_trace = {
             "relation_type": "ENABLES",
             "span_count": 2,
             "quality_score": 0.75,
+            "baseline_rank_position": 0,  # Ranked #1 by baseline
+            "final_selected_rank": 0,     # Selected first
             "is_selected": True,  # POSITIVE (selected)
         },
         {
@@ -42,6 +44,8 @@ example_trace = {
             "relation_type": "REINFORCES",
             "span_count": 1,
             "quality_score": 0.55,
+            "baseline_rank_position": 3,  # Ranked #4 by baseline
+            "final_selected_rank": 1,     # Selected second
             "is_selected": True,  # POSITIVE (selected)
         },
         {
@@ -53,6 +57,8 @@ example_trace = {
             "relation_type": "COMPLEMENTS",
             "span_count": 3,
             "quality_score": 0.60,
+            "baseline_rank_position": 1,  # Ranked #2 by baseline
+            "final_selected_rank": 2,     # Selected third
             "is_selected": True,  # POSITIVE (selected)
         },
         {
@@ -64,6 +70,8 @@ example_trace = {
             "relation_type": "CONTAINS",
             "span_count": 1,
             "quality_score": 0.40,
+            "baseline_rank_position": 4,  # Ranked #5 by baseline
+            "final_selected_rank": -1,    # Not selected
             "is_selected": False,  # NEGATIVE (rejected)
         },
         {
@@ -75,6 +83,8 @@ example_trace = {
             "relation_type": "RELATED_TO",
             "span_count": 0,
             "quality_score": 0.20,
+            "baseline_rank_position": 5,  # Ranked last by baseline
+            "final_selected_rank": -1,    # Not selected
             "is_selected": False,  # NEGATIVE (rejected - no evidence)
         },
         {
@@ -86,6 +96,8 @@ example_trace = {
             "relation_type": "ENABLES",
             "span_count": 1,
             "quality_score": 0.50,
+            "baseline_rank_position": 2,  # Ranked #3 by baseline
+            "final_selected_rank": -1,    # Not selected
             "is_selected": False,  # NEGATIVE (rejected - lower quality than selected)
         },
     ],
@@ -119,4 +131,14 @@ print("  - Negative examples: edges with is_selected=False")
 print("  - Features: from_type, to_type, relation_type, span_count, quality_score")
 print()
 print("Pairwise ranking: selected edge should score higher than rejected edges")
+print()
+print("New fields for analysis:")
+print("  - baseline_rank_position: where baseline ranked this edge (0=best)")
+print("  - final_selected_rank: position in final selection (-1=not selected)")
+print()
+print("Edge edge_006 is interesting:")
+print("  - Baseline ranked it #3 (quality_score=0.50)")
+print("  - But it was NOT selected (final_selected_rank=-1)")
+print("  - This is a HARD NEGATIVE: high-quality by baseline, but rejected")
+print("  - These examples teach the model to discriminate beyond baseline")
 print()

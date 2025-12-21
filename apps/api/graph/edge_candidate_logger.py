@@ -198,14 +198,29 @@ def log_candidate_edges(
         capped_candidates = candidate_edges[:MAX_CANDIDATES_PER_REQUEST]
         was_capped = len(candidate_edges) > MAX_CANDIDATES_PER_REQUEST
         
-        # Compute quality scores for all candidates
+        # Compute quality scores and baseline ranks for all candidates
         enriched_candidates = []
         for edge in capped_candidates:
             edge_copy = edge.copy()
             edge_copy["quality_score"] = compute_edge_quality_score(edge)
             enriched_candidates.append(edge_copy)
         
+        # Sort by baseline quality_score to get baseline rank positions
+        # (This is how the deterministic baseline would rank them)
+        sorted_by_baseline = sorted(
+            enumerate(enriched_candidates),
+            key=lambda x: -x[1]["quality_score"]  # Descending
+        )
+        baseline_rank_map = {idx: rank for rank, (idx, _) in enumerate(sorted_by_baseline)}
+        
+        # Add baseline_rank_position to each candidate
+        for idx, edge in enumerate(enriched_candidates):
+            edge["baseline_rank_position"] = baseline_rank_map[idx]
+        
         selected_set = set(selected_edge_ids)
+        
+        # Compute final_selected_rank (position in the actual selected order)
+        selected_rank_map = {eid: rank for rank, eid in enumerate(selected_edge_ids)}
         
         record = {
             "trace_id": str(uuid.uuid4()),
@@ -229,6 +244,8 @@ def log_candidate_edges(
                     "relation_type": str(e.get("relation_type", "")),
                     "span_count": len(e.get("justification_spans", [])),
                     "quality_score": e.get("quality_score", 0.0),
+                    "baseline_rank_position": e.get("baseline_rank_position", -1),
+                    "final_selected_rank": selected_rank_map.get(str(e.get("edge_id", "")), -1),
                     "is_selected": str(e.get("edge_id", "")) in selected_set,
                 }
                 for e in enriched_candidates
