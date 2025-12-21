@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-12-21T02:16:36.869903",
+  "timestamp": "2025-12-21T12:09:02.246860",
   "dataset": "D:\\wellbeingqa\\eval\\datasets\\regression_unexpected_fails.jsonl",
   "deployment": "gpt-5.1",
   "total": 10,
@@ -22,7 +22,7 @@
       "type": "boundaries",
       "mode_used": "answer",
       "contract_outcome": "PASS_FULL",
-      "citations_count": 13,
+      "citations_count": 12,
       "edges_count": 4,
       "abstained": false,
       "success": true
@@ -42,7 +42,7 @@
       "type": "natural_chat",
       "mode_used": "natural_chat",
       "contract_outcome": "PASS_FULL",
-      "citations_count": 5,
+      "citations_count": 12,
       "edges_count": 0,
       "abstained": false,
       "success": true
@@ -62,7 +62,7 @@
       "type": "global_synthesis",
       "mode_used": "answer",
       "contract_outcome": "PASS_FULL",
-      "citations_count": 13,
+      "citations_count": 12,
       "edges_count": 4,
       "abstained": false,
       "success": true
@@ -92,7 +92,7 @@
       "type": "boundaries",
       "mode_used": "answer",
       "contract_outcome": "PASS_FULL",
-      "citations_count": 13,
+      "citations_count": 12,
       "edges_count": 4,
       "abstained": false,
       "success": true
@@ -102,7 +102,7 @@
       "type": "natural_chat",
       "mode_used": "natural_chat",
       "contract_outcome": "PASS_FULL",
-      "citations_count": 9,
+      "citations_count": 5,
       "edges_count": 12,
       "abstained": false,
       "success": true

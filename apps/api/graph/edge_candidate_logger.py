@@ -6,12 +6,19 @@ Purpose:
 - Track selected vs rejected edges
 - Collect real training labels for edge scorer
 
-Only logs for PASS_FULL outcomes on relevant intents.
+Logging policy:
+- PASS_FULL → training logs (data/phase2/edge_traces/train/*.jsonl)
+- PASS_PARTIAL/FAIL → debug logs (data/phase2/edge_traces/debug/*.jsonl)
+
+Safeguards:
+- Sampling: Only logs a configurable % of eligible requests
+- Caps: Max candidates per request, max file size with rotation
 """
 
 import json
 import logging
 import os
+import random
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -22,6 +29,13 @@ logger = logging.getLogger(__name__)
 # Configuration
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 TRACE_DIR = PROJECT_ROOT / "data" / "phase2" / "edge_traces"
+TRAIN_DIR = TRACE_DIR / "train"
+DEBUG_DIR = TRACE_DIR / "debug"
+
+# Safeguards (configurable via env vars)
+SAMPLE_RATE = float(os.getenv("EDGE_TRACE_SAMPLE_RATE", "0.25"))  # 25% default
+MAX_CANDIDATES_PER_REQUEST = int(os.getenv("EDGE_TRACE_MAX_CANDIDATES", "100"))
+MAX_FILE_SIZE_MB = float(os.getenv("EDGE_TRACE_MAX_FILE_MB", "50"))  # Rotate at 50MB
 
 # Intents that benefit from edge scoring
 EDGE_SCORING_INTENTS = {
@@ -34,13 +48,57 @@ EDGE_SCORING_INTENTS = {
 }
 
 
-def should_log_edges(intent: Optional[str]) -> bool:
-    """Determine if candidate edges should be logged for this intent."""
+def should_log_edges(intent: Optional[str], apply_sampling: bool = True) -> bool:
+    """
+    Determine if candidate edges should be logged for this intent.
+    
+    Args:
+        intent: The detected intent type
+        apply_sampling: If True, applies probabilistic sampling
+    
+    Returns:
+        True if this request should be logged
+    """
     if not os.getenv("EDGE_TRACE_LOGGING", "false").lower() in {"1", "true", "yes"}:
         return False
     
     intent_lower = (intent or "").lower().strip()
-    return intent_lower in EDGE_SCORING_INTENTS
+    if intent_lower not in EDGE_SCORING_INTENTS:
+        return False
+    
+    # Apply probabilistic sampling to avoid disk growth
+    if apply_sampling and random.random() > SAMPLE_RATE:
+        return False
+    
+    return True
+
+
+def _get_trace_file(output_dir: Path, prefix: str) -> Path:
+    """
+    Get trace file with rotation support.
+    
+    Rotates when file exceeds MAX_FILE_SIZE_MB.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    today = datetime.utcnow().strftime("%Y%m%d")
+    
+    # Find current segment
+    segment = 0
+    while True:
+        filename = f"{prefix}_{today}_{segment:03d}.jsonl"
+        filepath = output_dir / filename
+        
+        if not filepath.exists():
+            return filepath
+        
+        # Check file size
+        size_mb = filepath.stat().st_size / (1024 * 1024)
+        if size_mb < MAX_FILE_SIZE_MB:
+            return filepath
+        
+        segment += 1
+        if segment > 999:  # Safety limit
+            return filepath
 
 
 def compute_edge_quality_score(edge: dict[str, Any]) -> float:
@@ -101,7 +159,14 @@ def log_candidate_edges(
     """
     Log candidate edge pool for training data collection.
     
-    Only logs PASS_FULL outcomes to ensure clean labels.
+    Logging policy:
+    - PASS_FULL → training logs (clean labels for ranking model)
+    - PASS_PARTIAL/FAIL → debug logs (diagnosis, not for training)
+    
+    Safeguards:
+    - Sampling: Only logs SAMPLE_RATE% of eligible requests
+    - Caps: Max MAX_CANDIDATES_PER_REQUEST candidates per log
+    - Rotation: New file when MAX_FILE_SIZE_MB exceeded
     
     Args:
         request_id: Unique request identifier
@@ -112,19 +177,30 @@ def log_candidate_edges(
         selected_edge_ids: IDs of edges that were selected (used_edges)
         contract_outcome: PASS_FULL, PASS_PARTIAL, or FAIL
     """
-    # Only log PASS_FULL for clean training labels
-    if contract_outcome != "PASS_FULL":
-        return
+    # Determine log type: training (PASS_FULL) or debug (others)
+    is_training = contract_outcome == "PASS_FULL"
     
-    if not should_log_edges(intent):
-        return
+    # For training logs, apply sampling; for debug logs, always log (but check if enabled)
+    if is_training:
+        if not should_log_edges(intent, apply_sampling=True):
+            return
+    else:
+        # Debug logging: check if enabled but don't apply sampling
+        if not should_log_edges(intent, apply_sampling=False):
+            return
     
     try:
-        TRACE_DIR.mkdir(parents=True, exist_ok=True)
+        # Choose output directory based on contract outcome
+        output_dir = TRAIN_DIR if is_training else DEBUG_DIR
+        prefix = "train" if is_training else "debug"
+        
+        # Apply candidate cap
+        capped_candidates = candidate_edges[:MAX_CANDIDATES_PER_REQUEST]
+        was_capped = len(candidate_edges) > MAX_CANDIDATES_PER_REQUEST
         
         # Compute quality scores for all candidates
         enriched_candidates = []
-        for edge in candidate_edges:
+        for edge in capped_candidates:
             edge_copy = edge.copy()
             edge_copy["quality_score"] = compute_edge_quality_score(edge)
             enriched_candidates.append(edge_copy)
@@ -140,6 +216,8 @@ def log_candidate_edges(
             "mode": mode,
             "contract_outcome": contract_outcome,
             "candidate_count": len(candidate_edges),
+            "candidate_count_logged": len(capped_candidates),
+            "was_capped": was_capped,
             "selected_count": len(selected_edge_ids),
             "candidate_edges": [
                 {
@@ -158,19 +236,19 @@ def log_candidate_edges(
             "selected_edge_ids": selected_edge_ids,
             "rejected_edge_ids": [
                 str(e.get("edge_id", ""))
-                for e in candidate_edges
+                for e in capped_candidates
                 if str(e.get("edge_id", "")) not in selected_set
             ],
         }
         
-        # Write to daily file
-        today = datetime.utcnow().strftime("%Y%m%d")
-        trace_file = TRACE_DIR / f"edge_traces_{today}.jsonl"
+        # Get trace file with rotation support
+        trace_file = _get_trace_file(output_dir, prefix)
         
         with open(trace_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
         
-        logger.debug(f"Logged {len(candidate_edges)} candidate edges for {intent}")
+        log_type = "training" if is_training else "debug"
+        logger.debug(f"Logged {len(capped_candidates)} candidate edges ({log_type}) for {intent}")
         
     except Exception as e:
         logger.warning(f"Failed to log candidate edges: {e}")
@@ -179,33 +257,54 @@ def log_candidate_edges(
 def get_edge_trace_stats() -> dict[str, Any]:
     """Get statistics about collected edge traces."""
     stats = {
-        "total_traces": 0,
-        "total_candidates": 0,
-        "total_selected": 0,
-        "total_rejected": 0,
-        "traces_by_intent": {},
-        "trace_files": [],
+        "training": {
+            "total_traces": 0,
+            "total_candidates": 0,
+            "total_selected": 0,
+            "total_rejected": 0,
+            "traces_by_intent": {},
+            "trace_files": [],
+        },
+        "debug": {
+            "total_traces": 0,
+            "total_candidates": 0,
+            "total_selected": 0,
+            "total_rejected": 0,
+            "traces_by_intent": {},
+            "trace_files": [],
+        },
+        "config": {
+            "sample_rate": SAMPLE_RATE,
+            "max_candidates_per_request": MAX_CANDIDATES_PER_REQUEST,
+            "max_file_size_mb": MAX_FILE_SIZE_MB,
+        },
     }
     
-    if not TRACE_DIR.exists():
-        return stats
-    
-    for trace_file in TRACE_DIR.glob("edge_traces_*.jsonl"):
-        stats["trace_files"].append(str(trace_file.name))
-        with open(trace_file, "r", encoding="utf-8") as f:
-            for line in f:
-                try:
-                    record = json.loads(line)
-                    stats["total_traces"] += 1
-                    stats["total_candidates"] += record.get("candidate_count", 0)
-                    stats["total_selected"] += record.get("selected_count", 0)
-                    stats["total_rejected"] += record.get("candidate_count", 0) - record.get("selected_count", 0)
-                    
-                    intent = record.get("intent", "unknown")
-                    if intent not in stats["traces_by_intent"]:
-                        stats["traces_by_intent"][intent] = 0
-                    stats["traces_by_intent"][intent] += 1
-                except:
-                    pass
+    for log_type, log_dir in [("training", TRAIN_DIR), ("debug", DEBUG_DIR)]:
+        if not log_dir.exists():
+            continue
+        
+        for trace_file in log_dir.glob("*.jsonl"):
+            stats[log_type]["trace_files"].append(str(trace_file.name))
+            try:
+                with open(trace_file, "r", encoding="utf-8") as f:
+                    for line in f:
+                        try:
+                            record = json.loads(line)
+                            stats[log_type]["total_traces"] += 1
+                            stats[log_type]["total_candidates"] += record.get("candidate_count_logged", 0)
+                            stats[log_type]["total_selected"] += record.get("selected_count", 0)
+                            stats[log_type]["total_rejected"] += (
+                                record.get("candidate_count_logged", 0) - record.get("selected_count", 0)
+                            )
+                            
+                            intent = record.get("intent", "unknown")
+                            if intent not in stats[log_type]["traces_by_intent"]:
+                                stats[log_type]["traces_by_intent"][intent] = 0
+                            stats[log_type]["traces_by_intent"][intent] += 1
+                        except json.JSONDecodeError:
+                            pass
+            except Exception:
+                pass
     
     return stats
