@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 # Edge scorer integration
 _edge_scorer_cache: dict[str, Any] = {"scorer": None, "checked": False}
 
+# Request context for logging (set by caller)
+_current_request_context: dict[str, Any] = {}
+
 
 def _get_edge_scorer():
     """Get edge scorer if enabled and available."""
@@ -68,6 +71,50 @@ def _apply_edge_scorer(
     except Exception as e:
         logger.warning(f"Edge scoring failed: {e}")
         return edges
+
+
+def set_compose_context(
+    *,
+    request_id: str = "",
+    question: str = "",
+    intent: str = "",
+    mode: str = "",
+) -> None:
+    """Set context for edge candidate logging."""
+    global _current_request_context
+    _current_request_context = {
+        "request_id": request_id,
+        "question": question,
+        "intent": intent,
+        "mode": mode,
+    }
+
+
+def _log_edge_candidates(
+    candidate_edges: list[dict[str, Any]],
+    selected_edges: list[dict[str, Any]],
+    contract_outcome: str = "PASS_FULL",
+) -> None:
+    """Log candidate edges for training data collection."""
+    if not _current_request_context.get("request_id"):
+        return
+    
+    try:
+        from apps.api.graph.edge_candidate_logger import log_candidate_edges
+        
+        selected_ids = [str(e.get("edge_id", "")) for e in selected_edges if e.get("edge_id")]
+        
+        log_candidate_edges(
+            request_id=_current_request_context.get("request_id", ""),
+            question=_current_request_context.get("question", ""),
+            intent=_current_request_context.get("intent", ""),
+            mode=_current_request_context.get("mode", ""),
+            candidate_edges=candidate_edges,
+            selected_edge_ids=selected_ids,
+            contract_outcome=contract_outcome,
+        )
+    except Exception as e:
+        logger.debug(f"Edge logging skipped: {e}")
 
 
 def _cite_span(citations: list[Citation], span: dict[str, Any]) -> None:
@@ -230,6 +277,9 @@ def compose_cross_pillar_path_answer(
         parts.append("- غير منصوص عليه")
         added += 1
 
+    # Log candidate edges for training data collection (cross_pillar intent)
+    _log_edge_candidates(semantic_edges or [], used_edges)
+
     return "\n".join(parts).strip(), citations, used_edges
 
 
@@ -263,6 +313,55 @@ def _edge_priority(ed: dict[str, Any]) -> int:
     return 3
 
 
+def _edge_quality_score(ed: dict[str, Any]) -> float:
+    """
+    Compute deterministic edge quality score (Option B baseline).
+    
+    Features used (all evidence-based):
+    - span_count: More justification spans = higher quality
+    - has_good_quotes: Non-empty quotes in spans
+    - semantic_relation: Known semantic relation types score higher
+    - entity_level: Value-level edges > pillar-level edges
+    
+    Returns:
+        Score in [0, 1] where higher is better
+    """
+    score = 0.0
+    
+    # Justification spans (up to 0.45)
+    spans = ed.get("justification_spans", [])
+    if isinstance(spans, list):
+        span_count = len(spans)
+        score += min(span_count * 0.15, 0.45)
+        
+        # Quality of quotes (up to 0.25)
+        good_quotes = sum(
+            1 for s in spans 
+            if isinstance(s, dict) and str(s.get("quote", "")).strip()
+        )
+        score += min(good_quotes * 0.1, 0.25)
+    
+    # Semantic relation type (0.15)
+    relation_type = str(ed.get("relation_type", "")).upper()
+    semantic_types = {
+        "ENABLES", "REINFORCES", "COMPLEMENTS", "CONDITIONAL_ON",
+        "INHIBITS", "TENSION_WITH", "RESOLVES_WITH"
+    }
+    if relation_type in semantic_types:
+        score += 0.15
+    
+    # Entity level priority (up to 0.15)
+    priority = _edge_priority(ed)
+    if priority == 0:
+        score += 0.15
+    elif priority == 1:
+        score += 0.10
+    elif priority == 2:
+        score += 0.05
+    
+    return min(score, 1.0)
+
+
 def compose_network_answer(
     *,
     packets: list[dict[str, Any]],
@@ -289,13 +388,21 @@ def compose_network_answer(
     if query:
         edges_to_use = _apply_edge_scorer(edges_to_use, query)
 
-    # UPGRADE: Sort edges by priority (value-level first, pillar-level last)
-    # If edge scorer was applied, use a combined sort: edge_score (if present) + priority
-    def combined_sort_key(ed: dict[str, Any]) -> tuple[float, int]:
-        # Higher edge_score = better (negate for ascending sort)
-        edge_score = ed.get("edge_score", 0.5)
+    # UPGRADE: Sort edges by combined quality/priority
+    # - If ML edge scorer was applied: use edge_score
+    # - Otherwise: use deterministic quality_score (Option B baseline)
+    def combined_sort_key(ed: dict[str, Any]) -> tuple[float, float, int]:
+        # ML edge_score if available (higher = better)
+        edge_score = ed.get("edge_score", 0.0)
+        
+        # Deterministic quality_score as baseline (higher = better)
+        quality_score = _edge_quality_score(ed)
+        
+        # Priority (lower = better)
         priority = _edge_priority(ed)
-        return (-edge_score, priority)
+        
+        # Sort: highest score first, then lowest priority
+        return (-edge_score, -quality_score, priority)
     
     sorted_edges = sorted(edges_to_use, key=combined_sort_key)
     
@@ -357,6 +464,9 @@ def compose_network_answer(
     while added < 3:
         parts.append("- غير منصوص عليه")
         added += 1
+
+    # Log candidate edges for training data collection (network intent)
+    _log_edge_candidates(semantic_edges or [], used_edges)
 
     return "\n".join(parts).strip(), citations, used_edges
 

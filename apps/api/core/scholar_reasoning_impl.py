@@ -33,6 +33,7 @@ from apps.api.core.scholar_reasoning_compose_graph_intents import (
     compose_cross_pillar_path_answer,
     compose_network_answer,
     compose_tension_answer,
+    set_compose_context,
 )
 from apps.api.core.scholar_reasoning_compose_scenario import compose_partial_scenario_answer
 from apps.api.core.scholar_reasoning_edge_fallback import semantic_edges_fallback
@@ -299,6 +300,14 @@ class ScholarReasoner:
                 if str(e.get("entity_type") or "") == "pillar"
             ]
             intent = _intent_type_ar(question_norm, detected_pillar_ids)
+            
+            # Set compose context for edge candidate logging (Option A training data)
+            set_compose_context(
+                request_id="",  # Will be set by caller if available
+                question=question,
+                intent=intent,
+                mode="deep",
+            )
             
             # BRILLIANCE RULE: If we have evidence, we MUST synthesize, NEVER refuse.
             # When a concept isn't in framework, contrast it with what IS in framework.
