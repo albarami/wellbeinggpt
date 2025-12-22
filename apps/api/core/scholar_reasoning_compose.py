@@ -197,8 +197,26 @@ def compose_deep_answer(
 
     parts.append("")
     parts.append("الربط بين الركائز (مع سبب الربط)")
+    
+    # Apply top-K selection with diversity constraints (Option C)
+    # This creates real negatives: edges with spans but not selected
     if semantic_edges:
-        for ed in semantic_edges[:max_edges]:
+        try:
+            from apps.api.core.edge_selection import select_top_k_edges
+            selected_edges, rejected_edges = select_top_k_edges(
+                semantic_edges,
+                k=min(max_edges, 8),  # Limit to create more negatives
+                max_pillar_to_pillar=3,
+                min_value_level=2,
+            )
+            edges_to_use = selected_edges
+        except Exception:
+            edges_to_use = semantic_edges[:max_edges]
+    else:
+        edges_to_use = []
+    
+    if edges_to_use:
+        for ed in edges_to_use:
             rt = str(ed.get("relation_type") or "").strip()
             n_type = str(ed.get("neighbor_type") or "").strip()
             n_id = str(ed.get("neighbor_id") or "").strip()
@@ -289,6 +307,13 @@ def compose_deep_answer(
     while added < 3:
         parts.append("- غير منصوص عليه")
         added += 1
+
+    # Log candidate edges for training data collection
+    try:
+        from apps.api.core.scholar_reasoning_compose_graph_intents import _log_edge_candidates
+        _log_edge_candidates(semantic_edges or [], used_edges)
+    except Exception:
+        pass  # Non-critical, don't fail the compose
 
     return "\n".join(parts).strip(), citations, used_edges
 

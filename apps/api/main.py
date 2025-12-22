@@ -4,6 +4,8 @@ Wellbeing Data Foundation API
 A zero-hallucination, evidence-only Arabic wellbeing assistant.
 """
 
+import os
+
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -43,6 +45,17 @@ app.include_router(ui_runs.router, tags=["ui"])
 async def health_check():
     """Health check endpoint."""
     cfg = ProviderConfig.from_env()
+    
+    # Edge trace stats
+    edge_trace_info = {}
+    try:
+        from apps.api.graph.edge_candidate_logger import get_edge_trace_stats, EDGE_SCORING_INTENTS
+        edge_trace_info = get_edge_trace_stats()
+        edge_trace_info["enabled"] = os.getenv("EDGE_TRACE_LOGGING", "false")
+        edge_trace_info["scoring_intents"] = list(EDGE_SCORING_INTENTS)
+    except Exception as e:
+        edge_trace_info = {"error": str(e)}
+    
     return {
         "status": "healthy",
         "version": "0.1.0",
@@ -53,6 +66,7 @@ async def health_check():
             "endpoint_set": bool(cfg.endpoint),
             "api_version": cfg.api_version,
         },
+        "edge_trace": edge_trace_info,
     }
 
 

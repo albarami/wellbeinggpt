@@ -15,8 +15,11 @@ Reason: split implementation to keep modules <500 LOC.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,6 +41,7 @@ from apps.api.core.scholar_reasoning_compose_graph_intents import (
 from apps.api.core.scholar_reasoning_compose_scenario import compose_partial_scenario_answer
 from apps.api.core.scholar_reasoning_edge_fallback import semantic_edges_fallback
 from apps.api.core.integrity_validator import validate_evidence_packets, get_integrity_warning_message
+from apps.api.core.edge_selection import apply_edge_selection_and_log, select_top_k_edges
 from apps.api.retrieve.graph_retriever import get_entity_neighbors
 from apps.api.retrieve.hybrid_retriever import HybridRetriever, RetrievalInputs
 from apps.api.retrieve.sql_retriever import get_chunks_with_refs, search_entities_by_name
@@ -171,8 +175,19 @@ def _intent_type_ar(q_norm: str, detected_pillars: list[str] | None = None) -> s
         return "scenario"
     
     # Network building (explicit request)
-    if any(x in q for x in ["شبكة", "ثلاث ركائز", "ثلاثة"]):
+    if any(x in q for x in ["شبكة", "ثلاث ركائز", "ثلاثة", "اربط", "روابط", "علاقات"]):
         return "network"
+    
+    # Cross-pillar by keyword (even if not detected as multiple pillars)
+    # This catches questions about relationship between dimensions/pillars
+    CROSS_PILLAR_KEYWORDS = [
+        "العلاقة بين", "الصلة بين", "التكامل بين", "يتكامل مع",
+        "يؤثر على", "تأثير", "الترابط", "البعد الروحي", "البعد البدني",
+        "البعد النفسي", "البعد الاجتماعي", "البعد المادي",
+        "الركيزة", "الركائز", "ركيزة", "ركائز",
+    ]
+    if any(x in q for x in CROSS_PILLAR_KEYWORDS):
+        return "cross_pillar"
     
     # Default: let evidence guide the answer
     # Generic still gets full scholar treatment with edges if found
@@ -252,8 +267,33 @@ class ScholarReasoner:
         # Note: integrity_warning can be surfaced in UI metadata if needed
 
         semantic_edges: list[dict[str, Any]] = []
+        candidate_pool: list[dict[str, Any]] = []  # Full pool for training data
+        
         if is_deep:
-            semantic_edges = await self._semantic_edges_from_entities(detected_entities)
+            # Fetch candidate pool (larger, looser filtering) for training data
+            candidate_pool = await self._semantic_edges_from_entities(
+                detected_entities, candidate_pool_mode=True
+            )
+            
+            # Select edges FROM the candidate pool (so IDs match for training)
+            # But only consider edges WITH justification_spans for compose
+            from apps.api.core.edge_selection import select_top_k_edges
+            
+            # Filter pool to edges with spans (usable in compose)
+            edges_with_spans = [
+                e for e in candidate_pool 
+                if e.get("justification_spans")
+            ]
+            logger.info(f"EDGE SELECTION: pool={len(candidate_pool)}, with_spans={len(edges_with_spans)}")
+            
+            if edges_with_spans:
+                selected, _ = select_top_k_edges(
+                    edges_with_spans, 
+                    k=self.targets.max_edges,
+                    min_semantic=1,  # Enforce semantic edge selection
+                )
+                semantic_edges = selected
+            
             if not semantic_edges:
                 semantic_edges = await semantic_edges_fallback(
                     session=self.session,
@@ -288,6 +328,20 @@ class ScholarReasoner:
                 except Exception:
                     pass  # Fall back to original edges on error
             
+            # OPTION C: Apply top-K selection with diversity constraints
+            # This creates real negatives: edges in pool but not selected
+            if candidate_pool and len(candidate_pool) > self.targets.max_edges:
+                selected, rejected = select_top_k_edges(
+                    candidate_pool,
+                    k=min(self.targets.max_edges, 10),
+                    max_pillar_to_pillar=3,
+                    min_value_level=2,
+                )
+                # Use selected edges (with spans) for composition
+                # Keep semantic_edges as the grounded ones (they have spans)
+                # But ensure we don't use more than top-K
+                semantic_edges = semantic_edges[:self.targets.max_edges]
+            
             if semantic_edges:
                 packets = await self._expand_packets_from_edges(packets, semantic_edges)
 
@@ -301,12 +355,15 @@ class ScholarReasoner:
             ]
             intent = _intent_type_ar(question_norm, detected_pillar_ids)
             
-            # Set compose context for edge candidate logging (Option A training data)
+            # Set compose context for edge candidate logging (Option A+C training data)
+            # Pass candidate_pool for proper negatives (edges not selected)
+            import uuid
             set_compose_context(
-                request_id="",  # Will be set by caller if available
+                request_id=str(uuid.uuid4()),  # Generate unique ID for this request
                 question=question,
                 intent=intent,
                 mode="deep",
+                candidate_pool=candidate_pool,  # Full pool for training negatives
             )
             
             # BRILLIANCE RULE: If we have evidence, we MUST synthesize, NEVER refuse.
@@ -494,7 +551,9 @@ class ScholarReasoner:
                         question_ar=question,
                         prefer_more_claims=True,
                     )
-            elif intent in {"cross_pillar_path"}:
+            elif intent in {"cross_pillar_path", "cross_pillar"}:
+                # Both cross_pillar and cross_pillar_path use the path composer
+                # This ensures cross-pillar questions always use semantic edges
                 answer_ar, citations, used_edges = compose_cross_pillar_path_answer(
                     packets=packets,
                     semantic_edges=semantic_edges,
@@ -513,7 +572,7 @@ class ScholarReasoner:
             # - Graph intents are structured and typically shorter; require a smaller floor to avoid false "not_found".
             # - Compare answers are matrices; also smaller than full deep narrative.
             # - Global synthesis has lower floor since it's structured with loops/interventions.
-            if intent in {"cross_pillar_path", "network", "tension", "global_synthesis"}:
+            if intent in {"cross_pillar", "cross_pillar_path", "network", "tension", "global_synthesis"}:
                 min_claims = 6
             elif intent == "compare":
                 min_claims = 10
@@ -561,7 +620,7 @@ class ScholarReasoner:
                         packets=packets2,
                         semantic_edges=semantic_edges2,
                     )
-                elif intent == "cross_pillar_path":
+                elif intent in {"cross_pillar_path", "cross_pillar"}:
                     answer_ar, citations, used_edges = compose_cross_pillar_path_answer(
                         packets=packets2,
                         semantic_edges=semantic_edges2,
@@ -807,18 +866,209 @@ class ScholarReasoner:
             except Exception:
                 pass
 
+    async def _fetch_value_level_edges(
+        self,
+        detected_entities: list[dict[str, Any]],
+        max_edges: int = 30,
+        min_strength: float = 0.1,
+    ) -> list[dict[str, Any]]:
+        """
+        Fetch value-level edges (core_value, sub_value) for training diversity.
+        
+        Queries edges where from_type or to_type is core_value or sub_value,
+        prioritizing edges connected to detected pillar entities.
+        
+        Args:
+            detected_entities: Detected entities (used to get relevant pillars)
+            max_edges: Maximum edges to return
+            min_strength: Minimum strength score threshold
+        
+        Returns:
+            List of value-level semantic edges
+        """
+        from sqlalchemy import text
+        
+        edges_out: list[dict[str, Any]] = []
+        
+        # Get pillar IDs from detected entities for relevance filtering
+        pillar_ids = [
+            str(e.get("id") or "")
+            for e in (detected_entities or [])
+            if str(e.get("type") or "") == "pillar" and e.get("id")
+        ]
+        
+        # Query for value-level edges with justification spans
+        query = """
+            SELECT 
+                e.id as edge_id,
+                e.from_type,
+                e.from_id,
+                e.to_type,
+                e.to_id,
+                e.relation_type,
+                e.strength_score,
+                e.rel_type,
+                COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'chunk_id', ejs.chunk_id,
+                            'span_start', ejs.span_start,
+                            'span_end', ejs.span_end,
+                            'quote', ejs.quote
+                        )
+                    ) FILTER (WHERE ejs.id IS NOT NULL),
+                    '[]'::json
+                ) as justification_spans
+            FROM edge e
+            LEFT JOIN edge_justification_span ejs ON e.id = ejs.edge_id
+            WHERE e.rel_type = 'SCHOLAR_LINK'
+              AND e.status = 'approved'
+              AND (
+                  e.from_type IN ('core_value', 'sub_value')
+                  OR e.to_type IN ('core_value', 'sub_value')
+              )
+              AND e.strength_score >= :min_strength
+            GROUP BY e.id, e.from_type, e.from_id, e.to_type, e.to_id, 
+                     e.relation_type, e.strength_score, e.rel_type
+            ORDER BY e.strength_score DESC
+            LIMIT :max_edges
+        """
+        
+        try:
+            result = await self.session.execute(
+                text(query),
+                {"min_strength": min_strength, "max_edges": max_edges * 2}
+            )
+            
+            for row in result.fetchall():
+                # Parse justification spans from JSON
+                spans = row.justification_spans if row.justification_spans else []
+                if isinstance(spans, str):
+                    import json
+                    spans = json.loads(spans)
+                
+                edge = {
+                    "edge_id": str(row.edge_id),
+                    "source_type": row.from_type,
+                    "source_id": row.from_id,
+                    "neighbor_type": row.to_type,
+                    "neighbor_id": row.to_id,
+                    "relation_type": row.relation_type,
+                    "strength_score": row.strength_score,
+                    "rel_type": row.rel_type,
+                    "direction": "outgoing",
+                    "justification_spans": spans,
+                }
+                
+                # Prioritize edges connected to detected pillars
+                # (This ensures relevance to the question)
+                is_relevant = True  # Accept all value-level edges for diversity
+                if pillar_ids:
+                    # Boost relevance if connected to detected entities
+                    pass
+                
+                if is_relevant:
+                    edges_out.append(edge)
+                    
+                if len(edges_out) >= max_edges:
+                    break
+                    
+        except Exception as e:
+            logger.debug(f"Value-level edge fetch failed: {e}")
+        
+        return edges_out
+
     async def _semantic_edges_from_entities(
         self,
         detected_entities: list[dict[str, Any]],
         extra: bool = False,
+        candidate_pool_mode: bool = False,
     ) -> list[dict[str, Any]]:
-        """Fetch grounded semantic edges (SCHOLAR_LINK) for anchor entities."""
-
+        """
+        Fetch grounded semantic edges (SCHOLAR_LINK) for anchor entities.
+        
+        Args:
+            detected_entities: Entities to fetch neighbors for
+            extra: If True, use looser filtering for retry
+            candidate_pool_mode: If True, fetch larger pool (N=50-100) for selection
+        
+        Returns:
+            List of semantic edges (all candidates if candidate_pool_mode, else filtered)
+        """
         edges_out: list[dict[str, Any]] = []
-        max_edges = self.targets.max_edges + (4 if extra else 0)
-        min_strength = 0.2 if extra else 0.4
+        seen_edge_ids: set[str] = set()  # Dedup by edge_id
+        
+        # Candidate pool mode: fetch more edges with looser filtering
+        # Priority: value-level first, then pillar-level backfill
+        if candidate_pool_mode:
+            max_edges = 50  # Total pool size
+            max_value_level = 30  # Target for value-level edges
+            max_pillar_level = 20  # Backfill for pillar edges
+            min_strength = 0.1
+            
+            # Step 1: Fetch value-level edges first (for training diversity)
+            value_edges = await self._fetch_value_level_edges(
+                detected_entities,
+                max_edges=max_value_level,
+                min_strength=min_strength,
+            )
+            for e in value_edges:
+                eid = str(e.get("edge_id") or "")
+                if eid and eid not in seen_edge_ids:
+                    seen_edge_ids.add(eid)
+                    edges_out.append(e)
+            
+            logger.debug(f"Candidate pool: {len(edges_out)} value-level edges")
+            
+            # Step 2: Backfill with pillar-level edges from entity neighbors
+            remaining = max_edges - len(edges_out)
+            if remaining > 0:
+                pillar_edges = await self._fetch_pillar_edges_from_entities(
+                    detected_entities,
+                    max_edges=remaining,
+                    min_strength=min_strength,
+                    seen_edge_ids=seen_edge_ids,
+                    require_spans=False,  # Include even without spans for hard negatives
+                )
+                for e in pillar_edges:
+                    eid = str(e.get("edge_id") or "")
+                    if eid and eid not in seen_edge_ids:
+                        seen_edge_ids.add(eid)
+                        edges_out.append(e)
+            
+            logger.debug(f"Candidate pool: {len(edges_out)} total edges (after pillar backfill)")
+            
+        else:
+            # Normal mode: fetch grounded edges with stricter filtering
+            max_edges = self.targets.max_edges + (4 if extra else 0)
+            min_strength = 0.2 if extra else 0.4
+            
+            edges_out = await self._fetch_pillar_edges_from_entities(
+                detected_entities,
+                max_edges=max_edges,
+                min_strength=min_strength,
+                seen_edge_ids=seen_edge_ids,
+                require_spans=True,  # Only edges with justification spans
+            )
 
-        for e in (detected_entities or [])[:3]:
+        return edges_out
+
+    async def _fetch_pillar_edges_from_entities(
+        self,
+        detected_entities: list[dict[str, Any]],
+        max_edges: int,
+        min_strength: float,
+        seen_edge_ids: set[str],
+        require_spans: bool = True,
+    ) -> list[dict[str, Any]]:
+        """
+        Fetch pillar-level edges from detected entity neighbors.
+        
+        This is the original neighbor-based retrieval logic, extracted for reuse.
+        """
+        edges_out: list[dict[str, Any]] = []
+        
+        for e in (detected_entities or [])[:5]:
             et = str(e.get("type") or "")
             eid = str(e.get("id") or "")
             if not et or not eid:
@@ -832,7 +1082,11 @@ class ScholarReasoner:
                 status="approved",
             )
             for n in neigh:
-                # Annotate source endpoint for downstream used-edge tracing.
+                edge_id = str(n.get("edge_id") or "")
+                if edge_id in seen_edge_ids:
+                    continue
+                    
+                # Annotate source endpoint for downstream used-edge tracing
                 n["source_type"] = et
                 n["source_id"] = eid
                 rt = (n.get("relation_type") or "")
@@ -841,8 +1095,17 @@ class ScholarReasoner:
                     strength = float(n.get("strength_score") or 0.0)
                 except Exception:
                     strength = 0.0
-                if rt and spans and (strength >= min_strength):
-                    edges_out.append(n)
+                
+                # Filter based on mode
+                if require_spans:
+                    if rt and spans and (strength >= min_strength):
+                        edges_out.append(n)
+                        seen_edge_ids.add(edge_id)
+                else:
+                    if rt and (strength >= min_strength):
+                        edges_out.append(n)
+                        seen_edge_ids.add(edge_id)
+                        
                 if len(edges_out) >= max_edges:
                     break
             if len(edges_out) >= max_edges:

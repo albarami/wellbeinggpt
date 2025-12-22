@@ -37,14 +37,34 @@ SAMPLE_RATE = float(os.getenv("EDGE_TRACE_SAMPLE_RATE", "0.25"))  # 25% default
 MAX_CANDIDATES_PER_REQUEST = int(os.getenv("EDGE_TRACE_MAX_CANDIDATES", "100"))
 MAX_FILE_SIZE_MB = float(os.getenv("EDGE_TRACE_MAX_FILE_MB", "50"))  # Rotate at 50MB
 
-# Intents that benefit from edge scoring
+# Intents that require edge scoring for training
+# IMPORTANT: Only include intents where edges are REQUIRED for the answer
+# Do NOT include 'generic' - it dilutes training data with non-edge traces
 EDGE_SCORING_INTENTS = {
+    # Cross-pillar and network intents (MUST use edges)
     "cross_pillar",
     "cross_pillar_path",
+    "connect_across_pillars",
+    "network",
     "network_build",
+    "value_network",
+    # Synthesis intents (should use edges)
     "global_synthesis",
     "world_model_synthesis",
+    "mechanism_query",
+    # Relation-specific intents
+    "tension",
+    "compare",
+    # Additional standard names (for flexibility)
+    "network_build",
+    "world_model_synthesis",
     "pillar_relationship",
+    # API-level intent names (from main classifier)
+    "connect_across_pillars",
+    "practical_guidance",
+    "value_network",
+    "mechanism_query",
+    "compare_pillars",
 }
 
 
@@ -59,17 +79,22 @@ def should_log_edges(intent: Optional[str], apply_sampling: bool = True) -> bool
     Returns:
         True if this request should be logged
     """
-    if not os.getenv("EDGE_TRACE_LOGGING", "false").lower() in {"1", "true", "yes"}:
+    env_val = os.getenv("EDGE_TRACE_LOGGING", "false").lower()
+    if env_val not in {"1", "true", "yes"}:
+        logger.debug(f"Edge logging disabled: EDGE_TRACE_LOGGING={env_val}")
         return False
     
     intent_lower = (intent or "").lower().strip()
     if intent_lower not in EDGE_SCORING_INTENTS:
+        logger.debug(f"Edge logging skipped: intent '{intent_lower}' not in {EDGE_SCORING_INTENTS}")
         return False
     
     # Apply probabilistic sampling to avoid disk growth
     if apply_sampling and random.random() > SAMPLE_RATE:
+        logger.debug(f"Edge logging skipped: sampling (rate={SAMPLE_RATE})")
         return False
     
+    logger.debug(f"Edge logging enabled for intent '{intent_lower}'")
     return True
 
 
@@ -177,16 +202,22 @@ def log_candidate_edges(
         selected_edge_ids: IDs of edges that were selected (used_edges)
         contract_outcome: PASS_FULL, PASS_PARTIAL, or FAIL
     """
+    logger.info(f"log_candidate_edges called: request_id={request_id[:8] if request_id else 'None'}, intent={intent}, outcome={contract_outcome}, candidates={len(candidate_edges)}")
+    
     # Determine log type: training (PASS_FULL) or debug (others)
     is_training = contract_outcome == "PASS_FULL"
     
     # For training logs, apply sampling; for debug logs, always log (but check if enabled)
     if is_training:
-        if not should_log_edges(intent, apply_sampling=True):
+        should_log = should_log_edges(intent, apply_sampling=True)
+        logger.info(f"Training mode: should_log={should_log}")
+        if not should_log:
             return
     else:
         # Debug logging: check if enabled but don't apply sampling
-        if not should_log_edges(intent, apply_sampling=False):
+        should_log = should_log_edges(intent, apply_sampling=False)
+        logger.info(f"Debug mode: should_log={should_log}")
+        if not should_log:
             return
     
     try:

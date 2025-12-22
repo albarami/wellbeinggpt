@@ -79,6 +79,7 @@ def set_compose_context(
     question: str = "",
     intent: str = "",
     mode: str = "",
+    candidate_pool: list[dict[str, Any]] | None = None,
 ) -> None:
     """Set context for edge candidate logging."""
     global _current_request_context
@@ -87,6 +88,7 @@ def set_compose_context(
         "question": question,
         "intent": intent,
         "mode": mode,
+        "candidate_pool": candidate_pool or [],  # Full candidate pool (N edges)
     }
 
 
@@ -95,9 +97,35 @@ def _log_edge_candidates(
     selected_edges: list[dict[str, Any]],
     contract_outcome: str = "PASS_FULL",
 ) -> None:
-    """Log candidate edges for training data collection."""
-    if not _current_request_context.get("request_id"):
+    """
+    Log candidate edges for training data collection.
+    
+    Uses candidate_pool from context if available (Option A+C),
+    otherwise falls back to provided candidate_edges.
+    
+    This creates real negatives: edges in pool but not in selected_edges.
+    """
+    request_id = _current_request_context.get("request_id", "")
+    intent = _current_request_context.get("intent", "")
+    
+    if not request_id:
+        logger.debug(f"Edge logging skipped: no request_id (intent={intent})")
         return
+    
+    # Use candidate_pool from context if available (larger pool for training)
+    # Otherwise fall back to candidate_edges (what compose received)
+    pool = _current_request_context.get("candidate_pool", [])
+    if pool:
+        actual_candidates = pool
+        logger.debug(f"Using candidate_pool from context: {len(pool)} edges")
+    else:
+        actual_candidates = candidate_edges
+        logger.debug(f"Using candidate_edges from compose: {len(candidate_edges)} edges")
+    
+    logger.info(
+        f"_log_edge_candidates: request={request_id[:8]}, intent={intent}, "
+        f"pool={len(actual_candidates)}, selected={len(selected_edges)}"
+    )
     
     try:
         from apps.api.graph.edge_candidate_logger import log_candidate_edges
@@ -105,16 +133,19 @@ def _log_edge_candidates(
         selected_ids = [str(e.get("edge_id", "")) for e in selected_edges if e.get("edge_id")]
         
         log_candidate_edges(
-            request_id=_current_request_context.get("request_id", ""),
+            request_id=request_id,
             question=_current_request_context.get("question", ""),
-            intent=_current_request_context.get("intent", ""),
+            intent=intent,
             mode=_current_request_context.get("mode", ""),
-            candidate_edges=candidate_edges,
+            candidate_edges=actual_candidates,  # Full pool (creates negatives)
             selected_edge_ids=selected_ids,
             contract_outcome=contract_outcome,
         )
+        
+        rejected_count = len(actual_candidates) - len(selected_ids)
+        logger.info(f"Edge logging: {len(selected_ids)} selected, {rejected_count} rejected")
     except Exception as e:
-        logger.debug(f"Edge logging skipped: {e}")
+        logger.warning(f"Edge logging failed: {e}")
 
 
 def _cite_span(citations: list[Citation], span: dict[str, Any]) -> None:
